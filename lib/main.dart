@@ -30,7 +30,7 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
-  final LocalStorage _storage = new LocalStorage('some_key');
+  final LocalStorage _storage = LocalStorage('some_key');
 
   final TextEditingController _searchController = TextEditingController();
   late TabController? _tabController;
@@ -61,7 +61,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               title: TextField(
                 controller: _searchController,
                 decoration: const InputDecoration(
-                  hintText: 'Ticker...',
+                  hintText: '종목코드...',
                   contentPadding: EdgeInsets.all(8.0),
                   prefixIcon: Icon(Icons.search),
                   border: OutlineInputBorder(),
@@ -102,15 +102,53 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                         child: IconButton(
                           icon: const Icon(Icons.add),
                           onPressed: () {
-                            setState(() {
-                              _categories
-                                  .add(Category(name: "Test", items: []));
-                              _tabController = TabController(
-                                initialIndex: _tabController!.index,
-                                length: _categories.length,
-                                vsync: this,
-                              );
-                            });
+                            TextEditingController textFieldController =
+                                TextEditingController();
+                            showDialog(
+                                context: context,
+                                builder: (BuildContext context) {
+                                  return AlertDialog(
+                                    title:
+                                        const Text('목록'),
+                                    content: TextField(
+                                      controller: textFieldController,
+                                      decoration: const InputDecoration(
+                                        hintText: '목록 이름',
+                                      ),
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        child: const Text('취소'),
+                                        onPressed: () => Navigator.pop(context),
+                                      ),
+                                      TextButton(
+                                        child: const Text('확인'),
+                                        onPressed: () {
+                                          if (textFieldController.text.isNotEmpty) {
+                                            _categories.add(Category(
+                                                name: textFieldController.text,
+                                                items: []));
+                                            setState(() {
+                                              _tabController = TabController(
+                                                initialIndex:
+                                                _tabController!.index,
+                                                length: _categories.length,
+                                                vsync: this,
+                                              );
+                                            });
+                                          } else {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Text('목록 이름을 입력하세요.'),
+                                              ),
+                                            );
+                                          }
+                                          Navigator.pop(context);
+                                        },
+                                      )
+                                    ],
+                                  );
+                                });
                           },
                         ),
                       ),
@@ -122,7 +160,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 IconButton(
                   icon: const Icon(Icons.settings),
                   onPressed: () {
-                    print("settings");
+                    print('settings');
                   },
                 ),
               ],
