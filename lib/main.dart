@@ -30,92 +30,122 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
-  final LocalStorage storage = new LocalStorage('some_key');
+  final LocalStorage _storage = new LocalStorage('some_key');
 
   final TextEditingController _searchController = TextEditingController();
-  late TabController _tabController;
+  late TabController? _tabController;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _categories.length, vsync: this);
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _searchController.dispose();
+    _tabController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-        appBar: AppBar(
-          title: SizedBox(
-            height: 60,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: TextField(
+    return FutureBuilder(
+      future: _storage.ready,
+      builder: (BuildContext context, snapshot) {
+        if (snapshot.data == true) {
+          _tabController =
+              TabController(length: _categories.length, vsync: this);
+          return Scaffold(
+            appBar: AppBar(
+              toolbarHeight: kToolbarHeight + 16.0,
+              title: TextField(
                 controller: _searchController,
                 decoration: const InputDecoration(
                   hintText: 'Ticker...',
+                  contentPadding: EdgeInsets.all(8.0),
                   prefixIcon: Icon(Icons.search),
                   border: OutlineInputBorder(),
                 ),
                 onSubmitted: (String searchText) {
                   print(searchText);
-                  print(_tabController.index);
-
+                  print(_tabController!.index);
                   setState(() {
-                    _categories[_tabController.index].items.add(searchText);
+                    _categories[_tabController!.index].items.add(searchText);
                   });
                 },
               ),
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(kTextTabBarHeight),
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: Theme.of(context).colorScheme.surfaceVariant,
+                        width: 0.5,
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Flexible(
+                        fit: FlexFit.loose,
+                        child: TabBar(
+                          tabs: _categories.map((Category category) {
+                            return Tab(text: category.name);
+                          }).toList(),
+                          controller: _tabController,
+                          isScrollable: true,
+                          dividerColor: Colors.transparent,
+                        ),
+                      ),
+                      Tab(
+                        child: IconButton(
+                          icon: const Icon(Icons.add),
+                          onPressed: () {
+                            setState(() {
+                              _categories
+                                  .add(Category(name: "Test", items: []));
+                              _tabController = TabController(
+                                initialIndex: _tabController!.index,
+                                length: _categories.length,
+                                vsync: this,
+                              );
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.settings),
+                  onPressed: () {
+                    print("settings");
+                  },
+                ),
+              ],
             ),
-          ),
-          bottom: TabBar(
-            controller: _tabController,
-            tabs: _categories.map((Category category) {
-              return Tab(text: category.name);
-            }).toList(),
-          ),
-          actions: [
-            IconButton(
-              icon: Icon(Icons.settings),
-              onPressed: () {
-                print("settings");
-
-                setState(() {
-                  _categories.add(Category(name: "Test", items: []));
-                  _tabController =
-                      TabController(length: _categories.length, vsync: this);
-                });
-              },
+            body: TabBarView(
+              controller: _tabController,
+              children: _categories.map((Category category) {
+                return ListView.builder(
+                  itemCount: category.items.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    return ListTile(
+                      title: Text(category.items[index]),
+                    );
+                  },
+                );
+              }).toList(),
             ),
-          ],
-        ),
-        body: FutureBuilder(
-          future: storage.ready,
-          builder: (BuildContext context, snapshot) {
-            if (snapshot.data == true) {
-              return TabBarView(
-                controller: _tabController,
-                children: _categories.map((Category category) {
-                  return ListView.builder(
-                    itemCount: category.items.length,
-                    itemBuilder: (BuildContext context, int index) {
-                      return ListTile(
-                        title: Text(category.items[index]),
-                      );
-                    },
-                  );
-                }).toList(),
-              );
-            } else {
-              return const CircularProgressIndicator();
-            }
-          },
-        ));
+          );
+        } else {
+          return const CircularProgressIndicator();
+        }
+      },
+    );
   }
 }
 
