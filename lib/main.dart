@@ -31,7 +31,6 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   final LocalStorage _storage = LocalStorage('some_key');
-
   final TextEditingController _searchController = TextEditingController();
   late TabController? _tabController;
 
@@ -53,8 +52,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       future: _storage.ready,
       builder: (BuildContext context, snapshot) {
         if (snapshot.data == true) {
-          _tabController =
-              TabController(length: _categories.length, vsync: this);
+          _tabController = TabController(length: _categories.length, vsync: this);
           return Scaffold(
             appBar: AppBar(
               toolbarHeight: kToolbarHeight + 16.0,
@@ -90,9 +88,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       Flexible(
                         fit: FlexFit.loose,
                         child: TabBar(
-                          tabs: _categories.map((Category category) {
-                            return Tab(text: category.name);
-                          }).toList(),
+                          tabs: _categories.map((Category category) => Tab(text: category.name)).toList(),
                           controller: _tabController,
                           isScrollable: true,
                           dividerColor: Colors.transparent,
@@ -102,53 +98,41 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                         child: IconButton(
                           icon: const Icon(Icons.add),
                           onPressed: () {
-                            TextEditingController textFieldController =
-                                TextEditingController();
+                            TextEditingController textFieldController = TextEditingController();
                             showDialog(
-                                context: context,
-                                builder: (BuildContext context) {
-                                  return AlertDialog(
-                                    title:
-                                        const Text('목록'),
-                                    content: TextField(
-                                      controller: textFieldController,
-                                      decoration: const InputDecoration(
-                                        hintText: '목록 이름',
-                                      ),
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        child: const Text('취소'),
-                                        onPressed: () => Navigator.pop(context),
-                                      ),
-                                      TextButton(
-                                        child: const Text('확인'),
-                                        onPressed: () {
-                                          if (textFieldController.text.isNotEmpty) {
-                                            _categories.add(Category(
-                                                name: textFieldController.text,
-                                                items: []));
-                                            setState(() {
-                                              _tabController = TabController(
-                                                initialIndex:
-                                                _tabController!.index,
-                                                length: _categories.length,
-                                                vsync: this,
-                                              );
-                                            });
-                                          } else {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(
-                                                content: Text('목록 이름을 입력하세요.'),
-                                              ),
-                                            );
-                                          }
-                                          Navigator.pop(context);
-                                        },
-                                      )
-                                    ],
-                                  );
-                                });
+                              context: context,
+                              builder: (BuildContext context) => AlertDialog(
+                                title: const Text('목록'),
+                                content: TextField(
+                                  controller: textFieldController,
+                                  decoration: const InputDecoration(hintText: '목록 이름'),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    child: const Text('취소'),
+                                    onPressed: () => Navigator.pop(context),
+                                  ),
+                                  TextButton(
+                                    child: const Text('확인'),
+                                    onPressed: () {
+                                      if (textFieldController.text.isNotEmpty) {
+                                        _categories.add(Category(name: textFieldController.text, items: []));
+                                        setState(() {
+                                          _tabController = TabController(
+                                            initialIndex: _tabController!.index,
+                                            length: _categories.length,
+                                            vsync: this,
+                                          );
+                                        });
+                                      } else {
+                                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록 이름을 입력하세요.')));
+                                      }
+                                      Navigator.pop(context);
+                                    },
+                                  )
+                                ],
+                              ),
+                            );
                           },
                         ),
                       ),
