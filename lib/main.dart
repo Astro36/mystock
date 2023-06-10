@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/http.dart';
 import 'package:localstorage/localstorage.dart';
 
 void main() {
@@ -34,6 +37,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   late TabController? _tabController;
 
+  List<StockList> _stockLists = [
+    StockList(
+      name: 'Demo',
+      items: [Stock('AAPL', 'Apple Inc', '6408')],
+    ),
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -52,7 +62,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       future: _storage.ready,
       builder: (BuildContext context, snapshot) {
         if (snapshot.data == true) {
-          _tabController = TabController(length: _categories.length, vsync: this);
+          _tabController = TabController(length: _stockLists.length, vsync: this);
           return Scaffold(
             appBar: AppBar(
               toolbarHeight: kToolbarHeight + 16.0,
@@ -65,11 +75,58 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   border: OutlineInputBorder(),
                 ),
                 onSubmitted: (String searchText) {
-                  print(searchText);
-                  print(_tabController!.index);
-                  setState(() {
-                    _categories[_tabController!.index].items.add(searchText);
-                  });
+                  var response = http.get(Uri.parse('https://www.investing.com/search/?q=$searchText'));
+                  showDialog(
+                    context: context,
+                    builder: (BuildContext context) => AlertDialog(
+                      title: const Text('종목코드'),
+                      content: FutureBuilder(
+                          future: response,
+                          builder: (BuildContext context, snapshot) {
+                            if (snapshot.hasData) {
+                              var res = snapshot.data as Response;
+                              if (res.statusCode == 200) {
+                                String html = res.body;
+                                RegExp re = RegExp(r'window.allResultsQuotesDataArray = ([^;]+)');
+                                RegExpMatch? match = re.firstMatch(html);
+                                var jsonString = match![1];
+                                var searchResult = jsonDecode(jsonString!);
+                                print(searchResult);
+                                return Container(
+                                  width: double.minPositive,
+                                  child: ListView.builder(
+                                    shrinkWrap: true,
+                                    itemCount: searchResult.length,
+                                    itemBuilder: (BuildContext context, int index) {
+                                      return ListTile(
+                                        title: Text(searchResult[index]['symbol'] + ' (' + searchResult[index]['exchange'] + ')'),
+                                        subtitle: Text(searchResult[index]['name']),
+                                        onTap: () {
+                                          print(index);
+                                          setState(() {
+                                            _stockLists[_tabController!.index].items.add(
+                                                Stock(searchResult[index]['symbol'], searchResult[index]['name'], searchResult[index]['pairId'].toString()));
+                                          });
+                                          Navigator.pop(context);
+                                        },
+                                      );
+                                    },
+                                  ),
+                                );
+                              } else {
+                                print('Request failed with status: ${res.statusCode}.');
+                              }
+                            }
+                            return const Center(child: CircularProgressIndicator());
+                          }),
+                      actions: [
+                        TextButton(
+                          child: const Text('취소'),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                  );
                 },
               ),
               bottom: PreferredSize(
@@ -88,7 +145,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       Flexible(
                         fit: FlexFit.loose,
                         child: TabBar(
-                          tabs: _categories.map((Category category) => Tab(text: category.name)).toList(),
+                          tabs: _stockLists.map((StockList stockList) => Tab(text: stockList.name)).toList(),
                           controller: _tabController,
                           isScrollable: true,
                           dividerColor: Colors.transparent,
@@ -102,7 +159,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                             showDialog(
                               context: context,
                               builder: (BuildContext context) => AlertDialog(
-                                title: const Text('목록'),
+                                title: const Text('새 목록 이름'),
                                 content: TextField(
                                   controller: textFieldController,
                                   decoration: const InputDecoration(hintText: '목록 이름'),
@@ -116,11 +173,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                     child: const Text('확인'),
                                     onPressed: () {
                                       if (textFieldController.text.isNotEmpty) {
-                                        _categories.add(Category(name: textFieldController.text, items: []));
+                                        _stockLists.add(StockList(name: textFieldController.text, items: []));
                                         setState(() {
                                           _tabController = TabController(
                                             initialIndex: _tabController!.index,
-                                            length: _categories.length,
+                                            length: _stockLists.length,
                                             vsync: this,
                                           );
                                         });
@@ -151,12 +208,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             ),
             body: TabBarView(
               controller: _tabController,
-              children: _categories.map((Category category) {
+              children: _stockLists.map((StockList stockList) {
                 return ListView.builder(
-                  itemCount: category.items.length,
+                  itemCount: stockList.items.length,
                   itemBuilder: (BuildContext context, int index) {
                     return ListTile(
-                      title: Text(category.items[index]),
+                      title: Text(stockList.items[index].ticker),
+                      subtitle: Text(stockList.items[index].name),
                     );
                   },
                 );
@@ -171,31 +229,17 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 }
 
-class Category {
+class Stock {
+  final String ticker;
   final String name;
-  final List<String> items;
+  final String searchId;
 
-  Category({required this.name, required this.items});
+  Stock(this.ticker, this.name, this.searchId);
 }
 
-List<Category> _categories = [
-  Category(
-    name: 'Test1',
-    items: ['Apple'],
-  ),
-];
+class StockList {
+  final String name;
+  final List<Stock> items;
 
-// [
-//   Category(
-//     name: 'Fruits',
-//     items: ['Apple', 'Banana', 'Orange', 'Mango'],
-//   ),
-//   Category(
-//     name: 'Vegetables',
-//     items: ['Carrot', 'Broccoli', 'Tomato', 'Cabbage'],
-//   ),
-//   Category(
-//     name: 'Animals',
-//     items: ['Dog', 'Cat', 'Elephant', 'Lion'],
-//   ),
-// ];
+  StockList({required this.name, required this.items});
+}
