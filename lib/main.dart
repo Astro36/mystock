@@ -38,6 +38,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   final Storage _storage = Storage();
   final TextEditingController _searchController = TextEditingController();
   late TabController? _tabController;
+  int _selectedIndex = 0;
 
   @override
   void initState() {
@@ -59,6 +60,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         if (snapshot.hasData) {
           List<Portfolio> portfolios = snapshot.data!;
           _tabController = TabController(length: portfolios.length, vsync: this);
+          _tabController?.index = _selectedIndex;
           return Scaffold(
             appBar: AppBar(
               toolbarHeight: kToolbarHeight + 16.0,
@@ -105,7 +107,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                               name: searchResult[index]['name'],
                                               searchId: searchResult[index]['pairId'].toString()));
                                           await _storage.save(portfolios);
-                                          setState(() {});
+                                          setState(() {
+                                            _selectedIndex = _tabController!.index;
+                                          });
                                           Navigator.pop(context);
                                         },
                                       );
@@ -175,15 +179,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                       if (textFieldController.text.isNotEmpty) {
                                         print('Create new list');
                                         portfolios.add(Portfolio(name: textFieldController.text, stocks: []));
-                                        print(portfolios.length);
                                         await _storage.save(portfolios);
                                         setState(() {
-                                          _tabController = TabController(
-                                            initialIndex: _tabController!.index,
-                                            length: portfolios.length,
-                                            vsync: this,
-                                          );
-                                          print(portfolios.length);
+                                          _selectedIndex = _tabController!.length;
                                         });
                                       } else {
                                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록 이름을 입력하세요.')));
