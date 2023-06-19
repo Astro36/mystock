@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/http.dart';
-import 'package:localstorage/localstorage.dart';
+import 'package:path_provider/path_provider.dart';
 
 void main() {
   runApp(const MyApp());
@@ -33,16 +35,9 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
-  final LocalStorage _storage = LocalStorage('some_key');
+  final Storage _storage = Storage();
   final TextEditingController _searchController = TextEditingController();
   late TabController? _tabController;
-
-  List<StockList> _stockLists = [
-    StockList(
-      name: 'Demo',
-      items: [Stock('AAPL', 'Apple Inc', '6408')],
-    ),
-  ];
 
   @override
   void initState() {
@@ -59,17 +54,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
-      future: _storage.ready,
+      future: _storage.load(),
       builder: (BuildContext context, snapshot) {
-        if (snapshot.data == true) {
-          _tabController = TabController(length: _stockLists.length, vsync: this);
+        if (snapshot.hasData) {
+          List<Portfolio> portfolios = snapshot.data!;
+          _tabController = TabController(length: portfolios.length, vsync: this);
           return Scaffold(
             appBar: AppBar(
               toolbarHeight: kToolbarHeight + 16.0,
               title: TextField(
                 controller: _searchController,
                 decoration: const InputDecoration(
-                  hintText: '종목코드...',
+                  hintText: 'Ticker...',
                   contentPadding: EdgeInsets.all(8.0),
                   prefixIcon: Icon(Icons.search),
                   border: OutlineInputBorder(),
@@ -79,7 +75,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   showDialog(
                     context: context,
                     builder: (BuildContext context) => AlertDialog(
-                      title: const Text('종목코드'),
+                      title: const Text('Ticker'),
                       content: FutureBuilder(
                           future: response,
                           builder: (BuildContext context, snapshot) {
@@ -92,21 +88,24 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                 var jsonString = match![1];
                                 var searchResult = jsonDecode(jsonString!);
                                 print(searchResult);
-                                return Container(
+                                return SizedBox(
                                   width: double.minPositive,
                                   child: ListView.builder(
                                     shrinkWrap: true,
                                     itemCount: searchResult.length,
                                     itemBuilder: (BuildContext context, int index) {
                                       return ListTile(
-                                        title: Text(searchResult[index]['symbol'] + ' (' + searchResult[index]['exchange'] + ')'),
+                                        title: Text(searchResult[index]['symbol']),
                                         subtitle: Text(searchResult[index]['name']),
-                                        onTap: () {
-                                          print(index);
-                                          setState(() {
-                                            _stockLists[_tabController!.index].items.add(
-                                                Stock(searchResult[index]['symbol'], searchResult[index]['name'], searchResult[index]['pairId'].toString()));
-                                          });
+                                        trailing: Text(searchResult[index]['exchange']),
+                                        onTap: () async {
+                                          print('Add new stock');
+                                          portfolios[_tabController!.index].stocks.add(Stock(
+                                              ticker: searchResult[index]['symbol'],
+                                              name: searchResult[index]['name'],
+                                              searchId: searchResult[index]['pairId'].toString()));
+                                          await _storage.save(portfolios);
+                                          setState(() {});
                                           Navigator.pop(context);
                                         },
                                       );
@@ -121,7 +120,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           }),
                       actions: [
                         TextButton(
-                          child: const Text('취소'),
+                          child: const Text('Cancel'),
                           onPressed: () => Navigator.pop(context),
                         ),
                       ],
@@ -145,7 +144,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       Flexible(
                         fit: FlexFit.loose,
                         child: TabBar(
-                          tabs: _stockLists.map((StockList stockList) => Tab(text: stockList.name)).toList(),
+                          tabs: portfolios.map((e) => Text(e.name)).toList(),
                           controller: _tabController,
                           isScrollable: true,
                           dividerColor: Colors.transparent,
@@ -159,27 +158,32 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                             showDialog(
                               context: context,
                               builder: (BuildContext context) => AlertDialog(
-                                title: const Text('새 목록 이름'),
+                                title: const Text('New List'),
                                 content: TextField(
                                   controller: textFieldController,
-                                  decoration: const InputDecoration(hintText: '목록 이름'),
+                                  decoration: const InputDecoration(hintText: 'List Name'),
+                                  autofocus: true,
                                 ),
                                 actions: [
                                   TextButton(
-                                    child: const Text('취소'),
+                                    child: const Text('Cancel'),
                                     onPressed: () => Navigator.pop(context),
                                   ),
                                   TextButton(
-                                    child: const Text('확인'),
-                                    onPressed: () {
+                                    child: const Text('Ok'),
+                                    onPressed: () async {
                                       if (textFieldController.text.isNotEmpty) {
-                                        _stockLists.add(StockList(name: textFieldController.text, items: []));
+                                        print('Create new list');
+                                        portfolios.add(Portfolio(name: textFieldController.text, stocks: []));
+                                        print(portfolios.length);
+                                        await _storage.save(portfolios);
                                         setState(() {
                                           _tabController = TabController(
                                             initialIndex: _tabController!.index,
-                                            length: _stockLists.length,
+                                            length: portfolios.length,
                                             vsync: this,
                                           );
+                                          print(portfolios.length);
                                         });
                                       } else {
                                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록 이름을 입력하세요.')));
@@ -197,24 +201,16 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   ),
                 ),
               ),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.settings),
-                  onPressed: () {
-                    print('settings');
-                  },
-                ),
-              ],
             ),
             body: TabBarView(
               controller: _tabController,
-              children: _stockLists.map((StockList stockList) {
+              children: portfolios.map((Portfolio portfolio) {
                 return ListView.builder(
-                  itemCount: stockList.items.length,
+                  itemCount: portfolio.stocks.length,
                   itemBuilder: (BuildContext context, int index) {
                     return ListTile(
-                      title: Text(stockList.items[index].ticker),
-                      subtitle: Text(stockList.items[index].name),
+                      title: Text(portfolio.stocks[index].ticker),
+                      subtitle: Text(portfolio.stocks[index].name),
                     );
                   },
                 );
@@ -234,12 +230,67 @@ class Stock {
   final String name;
   final String searchId;
 
-  Stock(this.ticker, this.name, this.searchId);
+  Stock({
+    required this.ticker,
+    required this.name,
+    required this.searchId,
+  });
+
+  Stock.fromJson(Map<String, dynamic> json)
+      : ticker = json['ticker'] as String,
+        name = json['name'] as String,
+        searchId = json['search_id'] as String;
+
+  Map<String, dynamic> toJson() => {
+        'ticker': ticker,
+        'name': name,
+        'search_id': searchId,
+      };
 }
 
-class StockList {
-  final String name;
-  final List<Stock> items;
+class Portfolio {
+  String name;
+  List<Stock> stocks;
 
-  StockList({required this.name, required this.items});
+  Portfolio({
+    required this.name,
+    required this.stocks,
+  });
+
+  Portfolio.fromJson(Map<String, dynamic> json)
+      : name = json['name'] as String,
+        stocks = (json['stocks'] as List).map((e) => Stock.fromJson(e as Map<String, dynamic>)).toList();
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'stocks': stocks.map((e) => e.toJson()).toList(),
+      };
+}
+
+class Storage {
+  Future<String> get _localPath async {
+    final directory = await getApplicationDocumentsDirectory();
+    return directory.path;
+  }
+
+  Future<File> get _localFile async {
+    final path = await _localPath;
+    return File('$path/stocks.json');
+  }
+
+  Future<List<Portfolio>> load() async {
+    try {
+      final file = await _localFile;
+      final content = await file.readAsString();
+      final portfolios = jsonDecode(content) as List<dynamic>;
+      return portfolios.map((e) => Portfolio.fromJson(e)).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<File> save(List<Portfolio> favorites) async {
+    final file = await _localFile;
+    return file.writeAsString(jsonEncode(favorites));
+  }
 }
