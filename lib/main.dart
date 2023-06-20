@@ -36,9 +36,12 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   final Storage _storage = Storage();
+  late List<Portfolio> _portfolios;
+
   final TextEditingController _searchController = TextEditingController();
   late TabController? _tabController;
-  int _selectedIndex = 0;
+
+  int _focusedTabIndex = 0;
 
   @override
   void initState() {
@@ -58,157 +61,66 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       future: _storage.load(),
       builder: (BuildContext context, snapshot) {
         if (snapshot.hasData) {
-          List<Portfolio> portfolios = snapshot.data!;
-          _tabController = TabController(length: portfolios.length, vsync: this);
-          _tabController?.index = _selectedIndex;
+          _portfolios = snapshot.data!;
+          _tabController = TabController(length: _portfolios.length, vsync: this);
+          _tabController?.index = _focusedTabIndex;
           return Scaffold(
             appBar: AppBar(
               toolbarHeight: kToolbarHeight + 16.0,
-              title: TextField(
-                controller: _searchController,
-                decoration: const InputDecoration(
-                  hintText: 'Ticker...',
-                  contentPadding: EdgeInsets.all(8.0),
-                  prefixIcon: Icon(Icons.search),
-                  border: OutlineInputBorder(),
-                ),
-                onSubmitted: (String searchText) {
-                  var response = http.get(Uri.parse('https://www.investing.com/search/?q=$searchText'));
-                  showDialog(
-                    context: context,
-                    builder: (BuildContext context) => AlertDialog(
-                      title: const Text('Ticker'),
-                      content: FutureBuilder(
-                          future: response,
-                          builder: (BuildContext context, snapshot) {
-                            if (snapshot.hasData) {
-                              var res = snapshot.data as Response;
-                              if (res.statusCode == 200) {
-                                String html = res.body;
-                                RegExp re = RegExp(r'window.allResultsQuotesDataArray = ([^;]+)');
-                                RegExpMatch? match = re.firstMatch(html);
-                                var jsonString = match![1];
-                                var searchResult = jsonDecode(jsonString!);
-                                print(searchResult);
-                                return SizedBox(
-                                  width: double.minPositive,
-                                  child: ListView.builder(
-                                    shrinkWrap: true,
-                                    itemCount: searchResult.length,
-                                    itemBuilder: (BuildContext context, int index) {
-                                      return ListTile(
-                                        title: Text(searchResult[index]['symbol']),
-                                        subtitle: Text(searchResult[index]['name']),
-                                        trailing: Text(searchResult[index]['exchange']),
-                                        onTap: () async {
-                                          print('Add new stock');
-                                          portfolios[_tabController!.index].stocks.add(Stock(
-                                              ticker: searchResult[index]['symbol'],
-                                              name: searchResult[index]['name'],
-                                              searchId: searchResult[index]['pairId'].toString()));
-                                          await _storage.save(portfolios);
-                                          setState(() {
-                                            _selectedIndex = _tabController!.index;
-                                          });
-                                          Navigator.pop(context);
-                                        },
-                                      );
-                                    },
-                                  ),
-                                );
-                              } else {
-                                print('Request failed with status: ${res.statusCode}.');
-                              }
-                            }
-                            return const Center(child: CircularProgressIndicator());
-                          }),
-                      actions: [
-                        TextButton(
-                          child: const Text('Cancel'),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
+              title: _buildSearchForm(),
               bottom: PreferredSize(
                 preferredSize: const Size.fromHeight(kTextTabBarHeight),
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: Theme.of(context).colorScheme.surfaceVariant,
-                        width: 0.5,
-                      ),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Flexible(
-                        fit: FlexFit.loose,
-                        child: TabBar(
-                          tabs: portfolios.map((e) => Text(e.name)).toList(),
-                          controller: _tabController,
-                          isScrollable: true,
-                          dividerColor: Colors.transparent,
-                        ),
-                      ),
-                      Tab(
-                        child: IconButton(
-                          icon: const Icon(Icons.add),
-                          onPressed: () {
-                            TextEditingController textFieldController = TextEditingController();
-                            showDialog(
-                              context: context,
-                              builder: (BuildContext context) => AlertDialog(
-                                title: const Text('New List'),
-                                content: TextField(
-                                  controller: textFieldController,
-                                  decoration: const InputDecoration(hintText: 'List Name'),
-                                  autofocus: true,
-                                ),
-                                actions: [
-                                  TextButton(
-                                    child: const Text('Cancel'),
-                                    onPressed: () => Navigator.pop(context),
-                                  ),
-                                  TextButton(
-                                    child: const Text('Ok'),
-                                    onPressed: () async {
-                                      if (textFieldController.text.isNotEmpty) {
-                                        print('Create new list');
-                                        portfolios.add(Portfolio(name: textFieldController.text, stocks: []));
-                                        await _storage.save(portfolios);
-                                        setState(() {
-                                          _selectedIndex = _tabController!.length;
-                                        });
-                                      } else {
-                                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록 이름을 입력하세요.')));
-                                      }
-                                      Navigator.pop(context);
-                                    },
-                                  )
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                child: _buildTabBar(),
               ),
             ),
             body: TabBarView(
               controller: _tabController,
-              children: portfolios.map((Portfolio portfolio) {
+              children: _portfolios.map((Portfolio portfolio) {
                 return ListView.builder(
                   itemCount: portfolio.stocks.length,
                   itemBuilder: (BuildContext context, int index) {
+                    Stock stock = portfolio.stocks[index];
                     return ListTile(
-                      title: Text(portfolio.stocks[index].ticker),
-                      subtitle: Text(portfolio.stocks[index].name),
+                      title: Text(stock.ticker),
+                      subtitle: Text(stock.name),
+                      trailing: stock.price != null
+                          ? Wrap(
+                              spacing: 8,
+                              children: [
+                                Text(stock.price.toString(), style: const TextStyle(fontSize: 16, fontStyle: FontStyle.normal, fontWeight: FontWeight.w500)),
+                                Text('${stock.priceChanges?.toStringAsFixed(2)}%', style: const TextStyle(color: Colors.red, fontSize: 16)),
+                              ],
+                            )
+                          : FutureBuilder(
+                              future: _fetchStockPrice(stock.ticker),
+                              builder: (BuildContext context, AsyncSnapshot<StockUpdate> snapshot) {
+                                if (snapshot.hasData) {
+                                  StockUpdate update = snapshot.data!;
+                                  if (update.price != null) {
+                                    stock.price = update.price;
+                                    stock.priceChanges = update.priceChanges;
+                                    _storage.save(_portfolios);
+                                    print('save');
+                                  }
+                                  return Wrap(
+                                    spacing: 8,
+                                    children: [
+                                      Text(stock.price.toString(), style: const TextStyle(fontSize: 16)),
+                                      Text('${stock.priceChanges?.toStringAsFixed(2)}%', style: const TextStyle(color: Colors.red, fontSize: 16)),
+                                    ],
+                                  );
+                                } else {
+                                  return const CircularProgressIndicator();
+                                }
+                              },
+                            ),
+                      onTap: () {
+                        setState(() {
+                          stock.price = null;
+                          stock.priceChanges = null;
+                        });
+                        _storage.save(_portfolios);
+                      },
                     );
                   },
                 );
@@ -216,33 +128,185 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             ),
           );
         } else {
-          return const CircularProgressIndicator();
+          return const Center(child: CircularProgressIndicator());
         }
       },
     );
+  }
+
+  Widget _buildSearchForm() {
+    return TextField(
+      controller: _searchController,
+      decoration: const InputDecoration(
+        hintText: 'Ticker...',
+        contentPadding: EdgeInsets.all(8.0),
+        prefixIcon: Icon(Icons.search),
+        border: OutlineInputBorder(),
+      ),
+      onSubmitted: (String searchText) {
+        showDialog(
+          context: context,
+          builder: (BuildContext context) => AlertDialog(
+            title: const Text('Ticker'),
+            content: FutureBuilder(
+                future: http.get(Uri.parse('https://query1.finance.yahoo.com/v1/finance/search?q=$searchText')),
+                builder: (BuildContext context, AsyncSnapshot<Response> snapshot) {
+                  if (snapshot.hasData) {
+                    var res = snapshot.data as Response;
+                    if (res.statusCode == 200) {
+                      Map<String, dynamic> result = jsonDecode(res.body);
+                      var matches = result['quotes'];
+                      return SizedBox(
+                        width: double.minPositive,
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: matches.length,
+                          itemBuilder: (BuildContext context, int index) {
+                            return ListTile(
+                              title: Text(matches[index]['symbol']),
+                              subtitle: Text(matches[index]['longname']),
+                              trailing: Text(matches[index]['exchange']),
+                              onTap: () async {
+                                print('Add new stock');
+                                _portfolios[_tabController!.index].stocks.add(Stock(
+                                      ticker: matches[index]['symbol'],
+                                      name: matches[index]['longname'],
+                                    ));
+                                await _storage.save(_portfolios);
+                                setState(() {
+                                  _focusedTabIndex = _tabController!.index;
+                                });
+                                Navigator.pop(context);
+                              },
+                            );
+                          },
+                        ),
+                      );
+                    } else {
+                      print('Request failed with status: ${res.statusCode}.');
+                    }
+                  }
+                  return const Center(child: CircularProgressIndicator());
+                }),
+            actions: [
+              TextButton(
+                child: const Text('Cancel'),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTabBar() {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: Theme.of(context).colorScheme.surfaceVariant,
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Flexible(
+            fit: FlexFit.loose,
+            child: TabBar(
+              tabs: _portfolios.map((e) => Text(e.name)).toList(),
+              controller: _tabController,
+              isScrollable: true,
+              dividerColor: Colors.transparent,
+            ),
+          ),
+          Tab(
+            child: IconButton(
+              icon: const Icon(Icons.add),
+              onPressed: () {
+                TextEditingController textFieldController = TextEditingController();
+                showDialog(
+                  context: context,
+                  builder: (BuildContext context) => AlertDialog(
+                    title: const Text('New List'),
+                    content: TextField(
+                      controller: textFieldController,
+                      decoration: const InputDecoration(hintText: 'List Name'),
+                      autofocus: true,
+                    ),
+                    actions: [
+                      TextButton(
+                        child: const Text('Cancel'),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      TextButton(
+                        child: const Text('Ok'),
+                        onPressed: () async {
+                          if (textFieldController.text.isNotEmpty) {
+                            print('Create new list');
+                            _portfolios.add(Portfolio(name: textFieldController.text, stocks: []));
+                            await _storage.save(_portfolios);
+                            setState(() {
+                              _focusedTabIndex = _tabController!.length;
+                            });
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록 이름을 입력하세요.')));
+                          }
+                          Navigator.pop(context);
+                        },
+                      )
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<StockUpdate> _fetchStockPrice(String ticker) async {
+    var response = await http.get(Uri.parse('https://finance.yahoo.com/quote/$ticker'));
+    if (response.statusCode == 200) {
+      String html = response.body;
+      RegExp pricePattern = RegExp(r'data-field="regularMarketPrice" data-trend="none" data-pricehint="2" value="([^"]+)"');
+      RegExp priceChangesPattern =
+          RegExp(r'data-field="regularMarketChangePercent" data-trend="txt" data-pricehint="2" data-template="\({fmt}\)" value="([^"]+)');
+      RegExpMatch priceMatch = pricePattern.firstMatch(html)!;
+      RegExpMatch priceChangesMatch = priceChangesPattern.firstMatch(html)!;
+      return StockUpdate(
+        price: double.parse(priceMatch[1]!),
+        priceChanges: double.parse(priceChangesMatch[1]!) * 100,
+      );
+    }
+    return StockUpdate();
   }
 }
 
 class Stock {
   final String ticker;
   final String name;
-  final String searchId;
+  double? price;
+  double? priceChanges;
 
   Stock({
     required this.ticker,
     required this.name,
-    required this.searchId,
   });
 
   Stock.fromJson(Map<String, dynamic> json)
       : ticker = json['ticker'] as String,
         name = json['name'] as String,
-        searchId = json['search_id'] as String;
+        price = json['price'] as double?,
+        priceChanges = json['priceChanges'] as double?;
 
   Map<String, dynamic> toJson() => {
         'ticker': ticker,
         'name': name,
-        'search_id': searchId,
+        'price': price,
+        'priceChanges': priceChanges,
       };
 }
 
@@ -291,4 +355,14 @@ class Storage {
     final file = await _localFile;
     return file.writeAsString(jsonEncode(favorites));
   }
+}
+
+class StockUpdate {
+  double? price;
+  double? priceChanges;
+
+  StockUpdate({
+    this.price,
+    this.priceChanges,
+  });
 }
