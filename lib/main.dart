@@ -1,10 +1,6 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/http.dart';
-import 'package:path_provider/path_provider.dart';
+import './model.dart';
+import './repository.dart';
 
 void main() {
   runApp(const MyApp());
@@ -83,21 +79,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                     return ListTile(
                       title: Text(stock.ticker),
                       subtitle: Text(stock.name),
-                      trailing: stock.price >= 0
-                          ? Wrap(
-                              spacing: 8,
-                              children: [
-                                Text(stock.price.toString(), style: const TextStyle(fontSize: 16, fontStyle: FontStyle.normal, fontWeight: FontWeight.w500)),
-                                Text('${stock.priceChanges.toStringAsFixed(2)}%', style: const TextStyle(color: Colors.red, fontSize: 16)),
-                              ],
-                            )
-                          : const CircularProgressIndicator(),
+                      trailing: Wrap(
+                        spacing: 8,
+                        children: [
+                          Text(stock.price.toString(), style: const TextStyle(fontSize: 16, fontStyle: FontStyle.normal, fontWeight: FontWeight.w500)),
+                          Text('${stock.priceChanges.toStringAsFixed(2)}%', style: const TextStyle(color: Colors.red, fontSize: 16)),
+                        ],
+                      ),
                       onTap: () async {
-                        setState(() {
-                          stock.price = -1;
-                        });
-                        await stock.updatePrice();
-                        _storage.save(_portfolios);
+                        var result = await YahooFinance.fetchStockPrice(stock.ticker);
+                        stock.price = result.price;
+                        stock.priceChanges = result.priceChanges;
+                        await _storage.save(_portfolios);
                         setState(() {});
                       },
                     );
@@ -128,42 +121,34 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           builder: (BuildContext context) => AlertDialog(
             title: const Text('Ticker'),
             content: FutureBuilder(
-                future: http.get(Uri.parse('https://query1.finance.yahoo.com/v1/finance/search?q=$searchText')),
-                builder: (BuildContext context, AsyncSnapshot<Response> snapshot) {
+                future: YahooFinance.searchStock(searchText),
+                builder: (BuildContext context, AsyncSnapshot<List<Stock>> snapshot) {
+                  print(snapshot.data);
                   if (snapshot.hasData) {
-                    var res = snapshot.data as Response;
-                    if (res.statusCode == 200) {
-                      Map<String, dynamic> result = jsonDecode(res.body);
-                      var matches = result['quotes'];
-                      return SizedBox(
-                        width: double.minPositive,
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: matches.length,
-                          itemBuilder: (BuildContext context, int index) {
-                            return ListTile(
-                              title: Text(matches[index]['symbol']),
-                              subtitle: Text(matches[index]['longname']),
-                              trailing: Text(matches[index]['exchange']),
-                              onTap: () async {
-                                print('Add new stock');
-                                _portfolios[_tabController!.index].stocks.add(Stock(
-                                      ticker: matches[index]['symbol'],
-                                      name: matches[index]['longname'],
-                                    ));
-                                await _storage.save(_portfolios);
-                                setState(() {
-                                  _focusedTabIndex = _tabController!.index;
-                                });
-                                Navigator.pop(context);
-                              },
-                            );
-                          },
-                        ),
-                      );
-                    } else {
-                      print('Request failed with status: ${res.statusCode}.');
-                    }
+                    List<Stock> result = snapshot.data!;
+                    return SizedBox(
+                      width: double.minPositive,
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: result.length,
+                        itemBuilder: (BuildContext context, int index) {
+                          return ListTile(
+                            title: Text(result[index].ticker),
+                            subtitle: Text(result[index].name),
+                            trailing: Text(result[index].exchange),
+                            onTap: () async {
+                              print('Add new stock');
+                              _portfolios[_tabController!.index].stocks.add(result[index]);
+                              await _storage.save(_portfolios);
+                              setState(() {
+                                _focusedTabIndex = _tabController!.index;
+                              });
+                              Navigator.pop(context);
+                            },
+                          );
+                        },
+                      ),
+                    );
                   }
                   return const Center(child: CircularProgressIndicator());
                 }),
@@ -245,99 +230,4 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       ),
     );
   }
-}
-
-class Stock {
-  final String ticker;
-  final String name;
-  double price = 0;
-  double priceChanges = 0;
-
-  Stock({
-    required this.ticker,
-    required this.name,
-  });
-
-  Stock.fromJson(Map<String, dynamic> json)
-      : ticker = json['ticker'] as String,
-        name = json['name'] as String,
-        price = json['price'] as double,
-        priceChanges = json['priceChanges'] as double;
-
-  Map<String, dynamic> toJson() => {
-        'ticker': ticker,
-        'name': name,
-        'price': price,
-        'priceChanges': priceChanges,
-      };
-
-  Future<bool> updatePrice() async {
-    var response = await http.get(Uri.parse('https://query1.finance.yahoo.com/v8/finance/chart/$ticker?interval=1d'));
-    if (response.statusCode == 200) {
-      Map<String, dynamic> result = jsonDecode(response.body);
-      Map<String, dynamic> priceResult = result['chart']['result'][0]['meta'];
-      price = priceResult['regularMarketPrice'];
-      double pricePrevious = priceResult['chartPreviousClose'];
-      priceChanges = (price - pricePrevious) / pricePrevious;
-      return true;
-    }
-    return false;
-  }
-}
-
-class Portfolio {
-  String name;
-  List<Stock> stocks;
-
-  Portfolio({
-    required this.name,
-    required this.stocks,
-  });
-
-  Portfolio.fromJson(Map<String, dynamic> json)
-      : name = json['name'] as String,
-        stocks = (json['stocks'] as List).map((e) => Stock.fromJson(e as Map<String, dynamic>)).toList();
-
-  Map<String, dynamic> toJson() => {
-        'name': name,
-        'stocks': stocks.map((e) => e.toJson()).toList(),
-      };
-}
-
-class Storage {
-  Future<String> get _localPath async {
-    final directory = await getApplicationDocumentsDirectory();
-    return directory.path;
-  }
-
-  Future<File> get _localFile async {
-    final path = await _localPath;
-    return File('$path/stocks.json');
-  }
-
-  Future<List<Portfolio>> load() async {
-    try {
-      final file = await _localFile;
-      final content = await file.readAsString();
-      final portfolios = jsonDecode(content) as List<dynamic>;
-      return portfolios.map((e) => Portfolio.fromJson(e)).toList();
-    } catch (e) {
-      return [];
-    }
-  }
-
-  Future<File> save(List<Portfolio> favorites) async {
-    final file = await _localFile;
-    return file.writeAsString(jsonEncode(favorites));
-  }
-}
-
-class StockUpdate {
-  double? price;
-  double? priceChanges;
-
-  StockUpdate({
-    this.price,
-    this.priceChanges,
-  });
 }
