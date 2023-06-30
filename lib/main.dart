@@ -109,57 +109,58 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   Widget _buildSearchForm() {
     return TextField(
       controller: _searchController,
-      decoration: const InputDecoration(
+      decoration: InputDecoration(
         hintText: 'Ticker...',
-        contentPadding: EdgeInsets.all(8.0),
-        prefixIcon: Icon(Icons.search),
-        border: OutlineInputBorder(),
+        contentPadding: const EdgeInsets.all(8.0),
+        prefixIcon: const Icon(Icons.search),
+        suffixIcon: IconButton(onPressed: _searchController.clear, icon: const Icon(Icons.clear)),
+        border: const OutlineInputBorder(),
       ),
       onSubmitted: (String searchText) {
-        showDialog(
-          context: context,
-          builder: (BuildContext context) => AlertDialog(
-            title: const Text('Ticker'),
-            content: FutureBuilder(
-                future: YahooFinance.searchStock(searchText),
-                builder: (BuildContext context, AsyncSnapshot<List<Stock>> snapshot) {
-                  print(snapshot.data);
-                  if (snapshot.hasData) {
-                    List<Stock> result = snapshot.data!;
-                    return SizedBox(
-                      width: double.minPositive,
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: result.length,
-                        itemBuilder: (BuildContext context, int index) {
-                          return ListTile(
-                            title: Text(result[index].ticker),
-                            subtitle: Text(result[index].name),
-                            trailing: Text(result[index].exchange),
-                            onTap: () async {
-                              print('Add new stock');
-                              _portfolios[_tabController!.index].stocks.add(result[index]);
-                              await _storage.save(_portfolios);
-                              setState(() {
-                                _focusedTabIndex = _tabController!.index;
-                              });
-                              Navigator.pop(context);
-                            },
-                          );
-                        },
-                      ),
-                    );
-                  }
-                  return const Center(child: CircularProgressIndicator());
-                }),
-            actions: [
-              TextButton(
-                child: const Text('Cancel'),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ],
-          ),
-        );
+        if (searchText.isNotEmpty) {
+          showDialog(
+            context: context,
+            builder: (BuildContext context) => AlertDialog(
+              title: const Text('Ticker'),
+              content: FutureBuilder(
+                  future: YahooFinance.searchStock(searchText),
+                  builder: (BuildContext context, AsyncSnapshot<List<Stock>> snapshot) {
+                    if (snapshot.hasData) {
+                      List<Stock> result = snapshot.data!;
+                      return SizedBox(
+                        width: 560.0,
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: result.length,
+                          itemBuilder: (BuildContext context, int index) {
+                            return ListTile(
+                              title: Text(result[index].ticker),
+                              subtitle: Text(result[index].name),
+                              trailing: Text(result[index].exchange),
+                              onTap: () async {
+                                _portfolios[_tabController!.index].stocks.add(result[index]);
+                                await _storage.save(_portfolios);
+                                setState(() {
+                                  _focusedTabIndex = _tabController!.index;
+                                });
+                                Navigator.pop(context);
+                              },
+                            );
+                          },
+                        ),
+                      );
+                    }
+                    return const Center(child: CircularProgressIndicator());
+                  }),
+              actions: [
+                TextButton(
+                  child: const Text('Cancel'),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          );
+        }
       },
     );
   }
