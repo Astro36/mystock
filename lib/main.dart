@@ -83,43 +83,22 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                     return ListTile(
                       title: Text(stock.ticker),
                       subtitle: Text(stock.name),
-                      trailing: stock.price != null
+                      trailing: stock.price >= 0
                           ? Wrap(
                               spacing: 8,
                               children: [
                                 Text(stock.price.toString(), style: const TextStyle(fontSize: 16, fontStyle: FontStyle.normal, fontWeight: FontWeight.w500)),
-                                Text('${stock.priceChanges?.toStringAsFixed(2)}%', style: const TextStyle(color: Colors.red, fontSize: 16)),
+                                Text('${stock.priceChanges.toStringAsFixed(2)}%', style: const TextStyle(color: Colors.red, fontSize: 16)),
                               ],
                             )
-                          : FutureBuilder(
-                              future: _fetchStockPrice(stock.ticker),
-                              builder: (BuildContext context, AsyncSnapshot<StockUpdate> snapshot) {
-                                if (snapshot.hasData) {
-                                  StockUpdate update = snapshot.data!;
-                                  if (update.price != null) {
-                                    stock.price = update.price;
-                                    stock.priceChanges = update.priceChanges;
-                                    _storage.save(_portfolios);
-                                    print('save');
-                                  }
-                                  return Wrap(
-                                    spacing: 8,
-                                    children: [
-                                      Text(stock.price.toString(), style: const TextStyle(fontSize: 16)),
-                                      Text('${stock.priceChanges?.toStringAsFixed(2)}%', style: const TextStyle(color: Colors.red, fontSize: 16)),
-                                    ],
-                                  );
-                                } else {
-                                  return const CircularProgressIndicator();
-                                }
-                              },
-                            ),
-                      onTap: () {
+                          : const CircularProgressIndicator(),
+                      onTap: () async {
                         setState(() {
-                          stock.price = null;
-                          stock.priceChanges = null;
+                          stock.price = -1;
                         });
+                        await stock.updatePrice();
                         _storage.save(_portfolios);
+                        setState(() {});
                       },
                     );
                   },
@@ -215,7 +194,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           Flexible(
             fit: FlexFit.loose,
             child: TabBar(
-              tabs: _portfolios.map((e) => Text(e.name)).toList(),
+              tabs: _portfolios.map((e) => Tab(child: Text(e.name))).toList(),
               controller: _tabController,
               isScrollable: true,
               dividerColor: Colors.transparent,
@@ -266,30 +245,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       ),
     );
   }
-
-  Future<StockUpdate> _fetchStockPrice(String ticker) async {
-    var response = await http.get(Uri.parse('https://finance.yahoo.com/quote/$ticker'));
-    if (response.statusCode == 200) {
-      String html = response.body;
-      RegExp pricePattern = RegExp(r'data-field="regularMarketPrice" data-trend="none" data-pricehint="2" value="([^"]+)"');
-      RegExp priceChangesPattern =
-          RegExp(r'data-field="regularMarketChangePercent" data-trend="txt" data-pricehint="2" data-template="\({fmt}\)" value="([^"]+)');
-      RegExpMatch priceMatch = pricePattern.firstMatch(html)!;
-      RegExpMatch priceChangesMatch = priceChangesPattern.firstMatch(html)!;
-      return StockUpdate(
-        price: double.parse(priceMatch[1]!),
-        priceChanges: double.parse(priceChangesMatch[1]!) * 100,
-      );
-    }
-    return StockUpdate();
-  }
 }
 
 class Stock {
   final String ticker;
   final String name;
-  double? price;
-  double? priceChanges;
+  double price = 0;
+  double priceChanges = 0;
 
   Stock({
     required this.ticker,
@@ -299,8 +261,8 @@ class Stock {
   Stock.fromJson(Map<String, dynamic> json)
       : ticker = json['ticker'] as String,
         name = json['name'] as String,
-        price = json['price'] as double?,
-        priceChanges = json['priceChanges'] as double?;
+        price = json['price'] as double,
+        priceChanges = json['priceChanges'] as double;
 
   Map<String, dynamic> toJson() => {
         'ticker': ticker,
@@ -308,6 +270,19 @@ class Stock {
         'price': price,
         'priceChanges': priceChanges,
       };
+
+  Future<bool> updatePrice() async {
+    var response = await http.get(Uri.parse('https://query1.finance.yahoo.com/v8/finance/chart/$ticker?interval=1d'));
+    if (response.statusCode == 200) {
+      Map<String, dynamic> result = jsonDecode(response.body);
+      Map<String, dynamic> priceResult = result['chart']['result'][0]['meta'];
+      price = priceResult['regularMarketPrice'];
+      double pricePrevious = priceResult['chartPreviousClose'];
+      priceChanges = (price - pricePrevious) / pricePrevious;
+      return true;
+    }
+    return false;
+  }
 }
 
 class Portfolio {
