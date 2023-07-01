@@ -100,17 +100,26 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           shrinkWrap: true,
                           itemCount: result.length,
                           itemBuilder: (BuildContext context, int index) {
+                            final portfolio = _portfolios[_tabController!.index];
+                            final stock = result[index];
                             return ListTile(
-                              title: Text(result[index].ticker),
-                              subtitle: Text(result[index].name),
-                              trailing: Text(result[index].exchange),
+                              title: Text(stock.ticker),
+                              subtitle: Text(stock.name),
+                              trailing: Text(stock.exchange),
                               onTap: () async {
-                                _portfolios[_tabController!.index].stocks.add(result[index]);
-                                await _storage.save(_portfolios);
-                                setState(() {
-                                  _focusedTabIndex = _tabController!.index;
-                                });
-                                Navigator.pop(context);
+                                if (!portfolio.stocks.map((e) => e.ticker).contains(stock.ticker)) {
+                                  portfolio.stocks.add(stock);
+                                  await _storage.save(_portfolios);
+                                  setState(() {
+                                    _focusedTabIndex = _tabController!.index;
+                                  });
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('이미 목록에 추가된 종목입니다.')));
+                                }
+                                // use_build_context_synchronously
+                                if (context.mounted) {
+                                  Navigator.pop(context);
+                                }
                               },
                             );
                           },
@@ -202,26 +211,39 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         return ListView.builder(
           itemCount: portfolio.stocks.length,
           itemBuilder: (BuildContext context, int index) {
-            Stock stock = portfolio.stocks[index];
-            final priceFormat = NumberFormat.simpleCurrency(name: stock.price.currency);
-            final priceChangesFormat = NumberFormat('+###.##%;-###.##%;');
+            final stock = portfolio.stocks[index];
             return Dismissible(
               key: Key('${portfolio.name}-${stock.ticker}'),
               child: ListTile(
                 title: Text(stock.ticker),
                 subtitle: Text(stock.name),
-                trailing: Wrap(
-                  spacing: 8,
-                  children: [
-                    Text(
-                      priceFormat.format(stock.price.value),
-                      style: const TextStyle(fontSize: 16, fontStyle: FontStyle.normal, fontWeight: FontWeight.w500),
-                    ),
-                    Text(
-                      priceChangesFormat.format(stock.price.changes),
-                      style: TextStyle(color: stock.price.changes > 0 ? Colors.red : Colors.indigo, fontSize: 16),
-                    ),
-                  ],
+                trailing: FutureBuilder(
+                  future: Future(() async {
+                    if (DateTime.timestamp().difference(stock.priceUpdatedAt).inSeconds > 60) {
+                      stock.price = await YahooFinance.fetchStockPrice(stock.ticker);
+                    }
+                    return stock.price;
+                  }),
+                  builder: (BuildContext context, AsyncSnapshot<StockPrice> snapshot) {
+                    if (snapshot.hasData) {
+                      final priceFormat = NumberFormat.simpleCurrency(name: stock.price.currency);
+                      final priceChangesFormat = NumberFormat('+###.##%;-###.##%;');
+                      return Wrap(
+                        spacing: 8,
+                        children: [
+                          Text(
+                            priceFormat.format(stock.price.value),
+                            style: const TextStyle(fontSize: 16, fontStyle: FontStyle.normal, fontWeight: FontWeight.w500),
+                          ),
+                          Text(
+                            priceChangesFormat.format(stock.price.changes),
+                            style: TextStyle(color: stock.price.changes > 0 ? Colors.red : Colors.indigo, fontSize: 16),
+                          ),
+                        ],
+                      );
+                    }
+                    return const CircularProgressIndicator();
+                  },
                 ),
                 onTap: () async {
                   stock.price = await YahooFinance.fetchStockPrice(stock.ticker);

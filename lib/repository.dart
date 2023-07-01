@@ -26,9 +26,9 @@ class Storage {
     }
   }
 
-  Future<File> save(List<Portfolio> favorites) async {
+  Future<File> save(List<Portfolio> portfolios) async {
     final file = await _localFile;
-    return file.writeAsString(jsonEncode(favorites));
+    return file.writeAsString(jsonEncode(portfolios));
   }
 }
 
