@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import './model.dart';
 import './repository.dart';
 
@@ -14,10 +15,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
+      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.deepPurple),
       home: MyHomePage(),
     );
   }
@@ -55,49 +53,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     return FutureBuilder(
       future: _storage.load(),
-      builder: (BuildContext context, snapshot) {
+      builder: (BuildContext context, AsyncSnapshot<List<Portfolio>> snapshot) {
         if (snapshot.hasData) {
           _portfolios = snapshot.data!;
           _tabController = TabController(length: _portfolios.length, vsync: this);
           _tabController?.index = _focusedTabIndex;
           return Scaffold(
             appBar: AppBar(
+              title: _buildSearchField(),
+              bottom: PreferredSize(preferredSize: const Size.fromHeight(kTextTabBarHeight), child: _buildTabBar()),
               toolbarHeight: kToolbarHeight + 16.0,
-              title: _buildSearchForm(),
-              bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(kTextTabBarHeight),
-                child: _buildTabBar(),
-              ),
             ),
-            body: TabBarView(
-              controller: _tabController,
-              children: _portfolios.map((Portfolio portfolio) {
-                return ListView.builder(
-                  itemCount: portfolio.stocks.length,
-                  itemBuilder: (BuildContext context, int index) {
-                    Stock stock = portfolio.stocks[index];
-                    return ListTile(
-                      title: Text(stock.ticker),
-                      subtitle: Text(stock.name),
-                      trailing: Wrap(
-                        spacing: 8,
-                        children: [
-                          Text(stock.price.toString(), style: const TextStyle(fontSize: 16, fontStyle: FontStyle.normal, fontWeight: FontWeight.w500)),
-                          Text('${stock.priceChanges.toStringAsFixed(2)}%', style: const TextStyle(color: Colors.red, fontSize: 16)),
-                        ],
-                      ),
-                      onTap: () async {
-                        var result = await YahooFinance.fetchStockPrice(stock.ticker);
-                        stock.price = result.price;
-                        stock.priceChanges = result.priceChanges;
-                        await _storage.save(_portfolios);
-                        setState(() {});
-                      },
-                    );
-                  },
-                );
-              }).toList(),
-            ),
+            body: _buildTabBarView(),
           );
         } else {
           return const Center(child: CircularProgressIndicator());
@@ -106,7 +73,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildSearchForm() {
+  Widget _buildSearchField() {
     return TextField(
       controller: _searchController,
       decoration: InputDecoration(
@@ -128,7 +95,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                     if (snapshot.hasData) {
                       List<Stock> result = snapshot.data!;
                       return SizedBox(
-                        width: 560.0,
+                        width: 560, // default max size
                         child: ListView.builder(
                           shrinkWrap: true,
                           itemCount: result.length,
@@ -167,14 +134,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   Widget _buildTabBar() {
     return Container(
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: Theme.of(context).colorScheme.surfaceVariant,
-            width: 0.5,
-          ),
-        ),
-      ),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Theme.of(context).colorScheme.surfaceVariant, width: 0.5))),
       child: Row(
         children: [
           Flexible(
@@ -208,17 +168,20 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       TextButton(
                         child: const Text('Ok'),
                         onPressed: () async {
-                          if (textFieldController.text.isNotEmpty) {
-                            print('Create new list');
-                            _portfolios.add(Portfolio(name: textFieldController.text, stocks: []));
+                          var portfolioName = textFieldController.text;
+                          if (portfolioName.isNotEmpty) {
+                            _portfolios.add(Portfolio(name: portfolioName));
                             await _storage.save(_portfolios);
                             setState(() {
                               _focusedTabIndex = _tabController!.length;
                             });
+                            if (context.mounted) {
+                              // use_build_context_synchronously
+                              Navigator.pop(context);
+                            }
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록 이름을 입력하세요.')));
                           }
-                          Navigator.pop(context);
                         },
                       )
                     ],
@@ -229,6 +192,47 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildTabBarView() {
+    return TabBarView(
+      controller: _tabController,
+      children: _portfolios.map((Portfolio portfolio) {
+        return ListView.builder(
+          itemCount: portfolio.stocks.length,
+          itemBuilder: (BuildContext context, int index) {
+            Stock stock = portfolio.stocks[index];
+            final priceFormat = NumberFormat.simpleCurrency(name: stock.priceCurrency);
+            final priceChangesFormat = NumberFormat('+###.##%;-###.##%;');
+            return ListTile(
+              title: Text(stock.ticker),
+              subtitle: Text(stock.name),
+              trailing: Wrap(
+                spacing: 8,
+                children: [
+                  Text(
+                    priceFormat.format(stock.price),
+                    style: const TextStyle(fontSize: 16, fontStyle: FontStyle.normal, fontWeight: FontWeight.w500),
+                  ),
+                  Text(
+                    priceChangesFormat.format(stock.priceChanges),
+                    style: TextStyle(color: stock.priceChanges > 0 ? Colors.red : Colors.indigo, fontSize: 16),
+                  ),
+                ],
+              ),
+              onTap: () async {
+                var result = await YahooFinance.fetchStockPrice(stock.ticker);
+                stock.priceCurrency = result.priceCurrency;
+                stock.price = result.price;
+                stock.priceChanges = result.priceChanges;
+                await _storage.save(_portfolios);
+                setState(() {});
+              },
+            );
+          },
+        );
+      }).toList(),
     );
   }
 }

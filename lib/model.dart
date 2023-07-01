@@ -2,6 +2,7 @@ class Stock {
   final String ticker;
   final String name;
   final String exchange;
+  String priceCurrency = 'USD';
   double price = 0;
   double priceChanges = 0;
 
@@ -15,16 +16,18 @@ class Stock {
       : ticker = json['ticker'] as String,
         name = json['name'] as String,
         exchange = json['exchange'] as String,
+        priceCurrency = json['priceCurrency'] as String,
         price = json['price'] as double,
         priceChanges = json['priceChanges'] as double;
 
   Map<String, dynamic> toJson() => {
-    'ticker': ticker,
-    'name': name,
-    'exchange': exchange,
-    'price': price,
-    'priceChanges': priceChanges,
-  };
+        'ticker': ticker,
+        'name': name,
+        'exchange': exchange,
+        'priceCurrency': priceCurrency,
+        'price': price,
+        'priceChanges': priceChanges,
+      };
 }
 
 class Portfolio {
@@ -33,7 +36,7 @@ class Portfolio {
 
   Portfolio({
     required this.name,
-    required this.stocks,
+    this.stocks = const [],
   });
 
   Portfolio.fromJson(Map<String, dynamic> json)
@@ -41,7 +44,7 @@ class Portfolio {
         stocks = (json['stocks'] as List).map((e) => Stock.fromJson(e as Map<String, dynamic>)).toList();
 
   Map<String, dynamic> toJson() => {
-    'name': name,
-    'stocks': stocks.map((e) => e.toJson()).toList(),
-  };
+        'name': name,
+        'stocks': stocks.map((e) => e.toJson()).toList(),
+      };
 }

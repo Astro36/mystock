@@ -34,20 +34,21 @@ class Storage {
 
 class YahooFinance {
   static Future<StockPrice> fetchStockPrice(String ticker) async {
-    var response = await http.get(Uri.parse('https://query1.finance.yahoo.com/v8/finance/chart/$ticker?interval=1d'));
+    final response = await http.get(Uri.parse('https://query1.finance.yahoo.com/v8/finance/chart/$ticker?interval=1d'));
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body) as Map<String, dynamic>;
       final priceResult = result['chart']['result'][0]['meta'] as Map<String, dynamic>;
-      final double price = priceResult['regularMarketPrice'];
-      final double pricePrevious = priceResult['chartPreviousClose'];
-      final double priceChanges = (price - pricePrevious) / pricePrevious;
-      return StockPrice(price, priceChanges);
+      final priceCurrency = (priceResult['currency'] as String).toUpperCase();
+      final price = priceResult['regularMarketPrice'] as double;
+      final pricePrevious = priceResult['chartPreviousClose'] as double;
+      final priceChanges = (price - pricePrevious) / pricePrevious;
+      return StockPrice(priceCurrency, price, priceChanges);
     }
     throw Exception('Invalid ticker');
   }
 
   static Future<List<Stock>> searchStock(String ticker) async {
-    var response = await http.get(Uri.parse('https://query1.finance.yahoo.com/v1/finance/search?q=$ticker'));
+    final response = await http.get(Uri.parse('https://query1.finance.yahoo.com/v1/finance/search?q=$ticker'));
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body) as Map<String, dynamic>;
       final searchResult = result['quotes'] as List;
@@ -58,8 +59,9 @@ class YahooFinance {
 }
 
 class StockPrice {
+  String priceCurrency;
   double price;
   double priceChanges;
 
-  StockPrice(this.price, this.priceChanges);
+  StockPrice(this.priceCurrency, this.price, this.priceChanges);
 }
