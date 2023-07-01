@@ -205,29 +205,39 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             Stock stock = portfolio.stocks[index];
             final priceFormat = NumberFormat.simpleCurrency(name: stock.priceCurrency);
             final priceChangesFormat = NumberFormat('+###.##%;-###.##%;');
-            return ListTile(
-              title: Text(stock.ticker),
-              subtitle: Text(stock.name),
-              trailing: Wrap(
-                spacing: 8,
-                children: [
-                  Text(
-                    priceFormat.format(stock.price),
-                    style: const TextStyle(fontSize: 16, fontStyle: FontStyle.normal, fontWeight: FontWeight.w500),
-                  ),
-                  Text(
-                    priceChangesFormat.format(stock.priceChanges),
-                    style: TextStyle(color: stock.priceChanges > 0 ? Colors.red : Colors.indigo, fontSize: 16),
-                  ),
-                ],
+            return Dismissible(
+              key: Key('${portfolio.name}-${stock.ticker}'),
+              child: ListTile(
+                title: Text(stock.ticker),
+                subtitle: Text(stock.name),
+                trailing: Wrap(
+                  spacing: 8,
+                  children: [
+                    Text(
+                      priceFormat.format(stock.price),
+                      style: const TextStyle(fontSize: 16, fontStyle: FontStyle.normal, fontWeight: FontWeight.w500),
+                    ),
+                    Text(
+                      priceChangesFormat.format(stock.priceChanges),
+                      style: TextStyle(color: stock.priceChanges > 0 ? Colors.red : Colors.indigo, fontSize: 16),
+                    ),
+                  ],
+                ),
+                onTap: () async {
+                  var result = await YahooFinance.fetchStockPrice(stock.ticker);
+                  stock.priceCurrency = result.priceCurrency;
+                  stock.price = result.price;
+                  stock.priceChanges = result.priceChanges;
+                  await _storage.save(_portfolios);
+                  setState(() {});
+                },
               ),
-              onTap: () async {
-                var result = await YahooFinance.fetchStockPrice(stock.ticker);
-                stock.priceCurrency = result.priceCurrency;
-                stock.price = result.price;
-                stock.priceChanges = result.priceChanges;
+              onDismissed: (direction) async {
+                portfolio.stocks.removeAt(index);
                 await _storage.save(_portfolios);
-                setState(() {});
+                setState(() {
+                  _focusedTabIndex = _tabController!.index;
+                });
               },
             );
           },
