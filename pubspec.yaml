@@ -31,9 +31,11 @@ dependencies:
   flutter:
     sdk: flutter
 
+  equatable: ^2.0.5
   http: ^1.0.0
   intl: ^0.18.1
   path_provider: ^2.0.15
+  table_calendar: ^3.0.9
 
 dev_dependencies:
   flutter_test:

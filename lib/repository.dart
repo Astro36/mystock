@@ -33,6 +33,17 @@ class Storage {
 }
 
 class YahooFinance {
+  static Future<DateTime> fetchStockEarningsDate(String ticker) async {
+    final response = await http.get(Uri.parse('https://query2.finance.yahoo.com/v10/finance/quoteSummary/$ticker?modules=calendarEvents'));
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body) as Map<String, dynamic>;
+      final eventResult = result['quoteSummary']['result'][0]['calendarEvents'] as Map<String, dynamic>;
+      final earningsDate = DateTime.parse(eventResult['earnings']['earningsDate'][0]['fmt']);
+      return earningsDate;
+    }
+    throw Exception('Invalid ticker');
+  }
+
   static Future<StockPrice> fetchStockPrice(String ticker) async {
     final response = await http.get(Uri.parse('https://query1.finance.yahoo.com/v8/finance/chart/$ticker?interval=1d'));
     if (response.statusCode == 200) {
