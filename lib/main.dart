@@ -175,12 +175,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                             setState(() {
                               _focusedTabIndex = _tabController!.length;
                             });
-                            if (context.mounted) {
-                              // use_build_context_synchronously
-                              Navigator.pop(context);
-                            }
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록 이름을 입력하세요.')));
+                          }
+                          // use_build_context_synchronously
+                          if (context.mounted) {
+                            Navigator.pop(context);
                           }
                         },
                       )
@@ -203,7 +203,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           itemCount: portfolio.stocks.length,
           itemBuilder: (BuildContext context, int index) {
             Stock stock = portfolio.stocks[index];
-            final priceFormat = NumberFormat.simpleCurrency(name: stock.priceCurrency);
+            final priceFormat = NumberFormat.simpleCurrency(name: stock.price.currency);
             final priceChangesFormat = NumberFormat('+###.##%;-###.##%;');
             return Dismissible(
               key: Key('${portfolio.name}-${stock.ticker}'),
@@ -214,20 +214,17 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   spacing: 8,
                   children: [
                     Text(
-                      priceFormat.format(stock.price),
+                      priceFormat.format(stock.price.value),
                       style: const TextStyle(fontSize: 16, fontStyle: FontStyle.normal, fontWeight: FontWeight.w500),
                     ),
                     Text(
-                      priceChangesFormat.format(stock.priceChanges),
-                      style: TextStyle(color: stock.priceChanges > 0 ? Colors.red : Colors.indigo, fontSize: 16),
+                      priceChangesFormat.format(stock.price.changes),
+                      style: TextStyle(color: stock.price.changes > 0 ? Colors.red : Colors.indigo, fontSize: 16),
                     ),
                   ],
                 ),
                 onTap: () async {
-                  var result = await YahooFinance.fetchStockPrice(stock.ticker);
-                  stock.priceCurrency = result.priceCurrency;
-                  stock.price = result.price;
-                  stock.priceChanges = result.priceChanges;
+                  stock.price = await YahooFinance.fetchStockPrice(stock.ticker);
                   await _storage.save(_portfolios);
                   setState(() {});
                 },

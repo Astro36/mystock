@@ -57,11 +57,3 @@ class YahooFinance {
     throw Exception('Invalid ticker');
   }
 }
-
-class StockPrice {
-  String priceCurrency;
-  double price;
-  double priceChanges;
-
-  StockPrice(this.priceCurrency, this.price, this.priceChanges);
-}

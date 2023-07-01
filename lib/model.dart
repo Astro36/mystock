@@ -2,9 +2,8 @@ class Stock {
   final String ticker;
   final String name;
   final String exchange;
-  String priceCurrency = 'USD';
-  double price = 0;
-  double priceChanges = 0;
+  StockPrice _price = StockPrice('USD', 0, 0);
+  DateTime priceUpdatedAt = DateTime.utc(1970);
 
   Stock({
     required this.ticker,
@@ -16,18 +15,33 @@ class Stock {
       : ticker = json['ticker'] as String,
         name = json['name'] as String,
         exchange = json['exchange'] as String,
-        priceCurrency = json['priceCurrency'] as String,
-        price = json['price'] as double,
-        priceChanges = json['priceChanges'] as double;
+        _price = StockPrice(json['priceCurrency'] as String, json['price'] as double, json['priceChanges'] as double),
+        priceUpdatedAt = DateTime.parse(json['priceUpdatedAt'] as String);
 
   Map<String, dynamic> toJson() => {
         'ticker': ticker,
         'name': name,
         'exchange': exchange,
-        'priceCurrency': priceCurrency,
-        'price': price,
-        'priceChanges': priceChanges,
+        'priceCurrency': price.currency,
+        'price': price.value,
+        'priceChanges': price.changes,
+        'priceUpdatedAt': priceUpdatedAt.toString(),
       };
+
+  StockPrice get price => _price;
+
+  set price(StockPrice price) {
+    _price = price;
+    priceUpdatedAt = DateTime.timestamp();
+  }
+}
+
+class StockPrice {
+  String currency;
+  double value;
+  double changes;
+
+  StockPrice(this.currency, this.value, this.changes);
 }
 
 class Portfolio {
