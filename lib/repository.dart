@@ -22,7 +22,7 @@ class Storage {
       final portfolios = jsonDecode(content) as List<dynamic>;
       return portfolios.map((e) => Portfolio.fromJson(e)).toList();
     } catch (e) {
-      return [];
+      return [Portfolio(name: '관심')];
     }
   }
 
