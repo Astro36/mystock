@@ -50,7 +50,7 @@ class Portfolio {
 
   Portfolio({
     required this.name,
-    this.stocks = const [],
+    required this.stocks,
   });
 
   Portfolio.fromJson(Map<String, dynamic> json)

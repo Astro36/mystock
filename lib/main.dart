@@ -183,7 +183,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                         onPressed: () async {
                           var portfolioName = textFieldController.text;
                           if (portfolioName.isNotEmpty) {
-                            _portfolios.add(Portfolio(name: portfolioName));
+                            _portfolios.add(Portfolio(name: portfolioName, stocks: []));
                             await _storage.save(_portfolios);
                             setState(() {
                               _focusedTabIndex = _tabController!.length;
