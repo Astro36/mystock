@@ -65,7 +65,7 @@ class YahooFinance {
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body) as Map<String, dynamic>;
       final searchResult = result['quotes'] as List;
-      return searchResult.map((e) => Stock(ticker: e['symbol'], name: e['longname'] ?? e['shortname'], exchange: e['exchange'])).toList();
+      return searchResult.map((e) => Stock(ticker: e['symbol'], name: e['longname'] ?? e['shortname'] ?? e['symbol'], exchange: e['exchange'])).toList();
     }
     throw Exception('Invalid ticker');
   }
