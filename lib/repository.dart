@@ -38,10 +38,12 @@ class YahooFinance {
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body) as Map<String, dynamic>;
       final eventResult = result['quoteSummary']['result'][0]['calendarEvents'] as Map<String, dynamic>;
-      final earningsDate = DateTime.parse(eventResult['earnings']['earningsDate'][0]['fmt']);
-      return earningsDate;
+      if (eventResult['earnings']['earningsDate'].isNotEmpty) {
+        final earningsDate = DateTime.parse(eventResult['earnings']['earningsDate'][0]['fmt']);
+        return earningsDate;
+      }
     }
-    throw Exception('Invalid ticker');
+    return DateTime.utc(1970);
   }
 
   static Future<StockPrice> fetchStockPrice(String ticker) async {
