@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import './calendar.dart';
-import './editor.dart';
 import '../model.dart';
 import '../repository.dart';
 
@@ -9,7 +8,7 @@ class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key});
 
   @override
-  _MyHomePageState createState() => _MyHomePageState();
+  State createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
@@ -52,8 +51,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                     Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (BuildContext context) =>
-                                MyEarningsCalendarPage(stocks: _portfolios.map((e) => e.stocks.toSet()).reduce((value, element) => value.union(element)).toList())));
+                            builder: (BuildContext context) => MyEarningsCalendarPage(
+                                stocks: _portfolios.map((e) => e.stocks.toSet()).reduce((value, element) => value.union(element)).toList())));
                   },
                 )
               ],
@@ -73,7 +72,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     return TextField(
       controller: _searchController,
       decoration: InputDecoration(
-        hintText: '종목코드...',
+        hintText: '종목코드',
         contentPadding: const EdgeInsets.all(8.0),
         prefixIcon: const Icon(Icons.search),
         suffixIcon: IconButton(icon: const Icon(Icons.clear), onPressed: _searchController.clear),
@@ -84,7 +83,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           showDialog(
             context: context,
             builder: (BuildContext context) => AlertDialog(
-              title: const Text('종목코드'),
+              title: const Text('종목 추가'),
               content: FutureBuilder(
                   future: YahooFinance.searchStock(searchText),
                   builder: (BuildContext context, AsyncSnapshot<List<Stock>> snapshot) {
@@ -108,6 +107,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                   await _storage.save(_portfolios);
                                   setState(() {
                                     _focusedTabIndex = _tabController!.index;
+                                    _searchController.clear();
                                   });
                                 } else {
                                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('이미 목록에 추가된 종목입니다.')));
@@ -199,7 +199,103 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             child: IconButton(
               icon: const Icon(Icons.edit_note),
               onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (BuildContext context) => MyEditorPage()));
+                showDialog(
+                  context: context,
+                  builder: (BuildContext context) => AlertDialog(
+                    title: const Text('목록 수정'),
+                    content: StatefulBuilder(
+                      builder: (_, StateSetter setStateInner) {
+                        return SizedBox(
+                          width: 560, // default max size
+                          child: ReorderableListView(
+                            buildDefaultDragHandles: false,
+                            children: [
+                              for (int index = 0; index < _portfolios.length; index += 1)
+                                ListTile(
+                                  key: Key(index.toString()),
+                                  title: Text(_portfolios[index].name),
+                                  tileColor: const Color(0xFFF6E2EA),
+                                  leading: ReorderableDragStartListener(index: index, child: const Icon(Icons.drag_handle)),
+                                  trailing: Wrap(
+                                    spacing: 8,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.edit),
+                                        onPressed: () {
+                                          TextEditingController textFieldController = TextEditingController();
+                                          showDialog(
+                                            context: context,
+                                            builder: (BuildContext context) => AlertDialog(
+                                              title: const Text('목록 이름 변경'),
+                                              content: TextField(
+                                                controller: textFieldController,
+                                                decoration: const InputDecoration(hintText: '목록 이름'),
+                                                autofocus: true,
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  child: const Text('취소'),
+                                                  onPressed: () => Navigator.pop(context),
+                                                ),
+                                                TextButton(
+                                                  child: const Text('확인'),
+                                                  onPressed: () async {
+                                                    var portfolioName = textFieldController.text;
+                                                    print(portfolioName);
+                                                    if (portfolioName.isNotEmpty) {
+                                                      _portfolios[index].name = portfolioName;
+                                                      _storage.save(_portfolios);
+                                                      setState(() {});
+                                                      setStateInner(() {});
+                                                    } else {
+                                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록 이름을 입력하세요.')));
+                                                    }
+                                                    // use_build_context_synchronously
+                                                    if (context.mounted) {
+                                                      Navigator.pop(context);
+                                                    }
+                                                  },
+                                                )
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.clear),
+                                        onPressed: () {
+                                          _portfolios.remove(_portfolios[index]);
+                                          _storage.save(_portfolios);
+                                          setState(() {});
+                                          setStateInner(() {});
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                )
+                            ],
+                            onReorder: (int oldIndex, int newIndex) {
+                              if (oldIndex < newIndex) {
+                                newIndex -= 1;
+                              }
+                              final item = _portfolios.removeAt(oldIndex);
+                              _portfolios.insert(newIndex, item);
+                              _storage.save(_portfolios);
+                              setState(() {});
+                              setStateInner(() {});
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                    actions: [
+                      TextButton(
+                        child: const Text('확인'),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                );
               },
             ),
           ),
@@ -253,6 +349,33 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 await stock.updatePrice();
                 await _storage.save(_portfolios);
                 setState(() {});
+              },
+              onLongPress: () {
+                showDialog(
+                  context: context,
+                  builder: (BuildContext context) => AlertDialog(
+                    title: const Text('종목 삭제'),
+                    content: const Text('해당 종목을 목록에서 삭제합니다.'),
+                    actions: [
+                      TextButton(
+                        child: const Text('취소'),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      TextButton(
+                        child: const Text('삭제'),
+                        onPressed: () async {
+                          portfolio.stocks.remove(stock);
+                          _storage.save(_portfolios);
+                          setState(() {});
+                          // use_build_context_synchronously
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                );
               },
             );
           },

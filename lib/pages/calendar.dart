@@ -10,7 +10,7 @@ class MyEarningsCalendarPage extends StatefulWidget {
   const MyEarningsCalendarPage({super.key, required this.stocks});
 
   @override
-  _MyEarningsCalendarPageState createState() => _MyEarningsCalendarPageState();
+  State createState() => _MyEarningsCalendarPageState();
 }
 
 class _MyEarningsCalendarPageState extends State<MyEarningsCalendarPage> {
@@ -21,10 +21,7 @@ class _MyEarningsCalendarPageState extends State<MyEarningsCalendarPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('실적 발표 예정일'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('실적 발표 예정일'), centerTitle: true),
       body: FutureBuilder(
         future: Future(() async {
           var stocks = LinkedHashMap<DateTime, List<Stock>>(
