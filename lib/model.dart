@@ -5,6 +5,7 @@ class Stock extends Equatable {
   final String ticker;
   final String name;
   final String exchange;
+  String priceCurrency = 'USD';
   StockPrice _price = StockPrice('USD', 0, 0);
   DateTime _priceUpdatedAt = DateTime.utc(1970);
   DateTime _earningsDate = DateTime.utc(1970);
@@ -20,6 +21,7 @@ class Stock extends Equatable {
       : ticker = json['ticker'] as String,
         name = json['name'] as String,
         exchange = json['exchange'] as String,
+        priceCurrency = json['priceCurrency'] as String,
         _price = StockPrice(json['priceCurrency'] as String, json['price'] as double, json['priceChanges'] as double),
         _priceUpdatedAt = DateTime.parse(json['priceUpdatedAt'] as String),
         _earningsDate = DateTime.parse(json['earningsDates'] as String),
@@ -39,16 +41,14 @@ class Stock extends Equatable {
 
   Future<StockPrice> get price async {
     if (DateTime.timestamp().difference(_priceUpdatedAt).inSeconds > 60) {
-      _price = await YahooFinance.fetchStockPrice(ticker);
-      _priceUpdatedAt = DateTime.timestamp();
+      await updatePrice();
     }
     return _price;
   }
 
   Future<DateTime> get earningsDates async {
     if (DateTime.timestamp().difference(_earningsDateUpdatedAt).inDays > 7) {
-      _earningsDate = await YahooFinance.fetchStockEarningsDate(ticker);
-      _earningsDateUpdatedAt = DateTime.timestamp();
+      await updateEarningsDates();
     }
     return _earningsDate;
   }
@@ -56,6 +56,7 @@ class Stock extends Equatable {
   Future<StockPrice> updatePrice() async {
     _price = await YahooFinance.fetchStockPrice(ticker);
     _priceUpdatedAt = DateTime.timestamp();
+    priceCurrency = _price.currency;
     return _price;
   }
 
@@ -94,4 +95,16 @@ class Portfolio {
         'name': name,
         'stocks': stocks.map((e) => e.toJson()).toList(),
       };
+
+  void sortStocks() {
+    stocks.sort((Stock a, Stock b) {
+      if (a.priceCurrency != b.priceCurrency) {
+        return b.priceCurrency.compareTo(a.priceCurrency);
+      }
+      if (a.exchange != b.exchange) {
+        return a.exchange.compareTo(b.exchange);
+      }
+      return a.ticker.compareTo(b.ticker);
+    });
+  }
 }
