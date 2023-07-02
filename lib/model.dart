@@ -101,9 +101,6 @@ class Portfolio {
       if (a.priceCurrency != b.priceCurrency) {
         return b.priceCurrency.compareTo(a.priceCurrency);
       }
-      if (a.exchange != b.exchange) {
-        return a.exchange.compareTo(b.exchange);
-      }
       return a.ticker.compareTo(b.ticker);
     });
   }

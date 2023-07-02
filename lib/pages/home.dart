@@ -103,9 +103,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                               trailing: Text(stock.exchange),
                               onTap: () async {
                                 if (!portfolio.stocks.map((e) => e.ticker).contains(stock.ticker)) {
+                                  await stock.price;
                                   portfolio.stocks.add(stock);
                                   portfolio.sortStocks();
-                                  print('sort');
                                   await _storage.save(_portfolios);
                                   setState(() {
                                     _focusedTabIndex = _tabController!.index;
