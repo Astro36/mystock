@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:table_calendar/table_calendar.dart';
 import './model.dart';
 import './repository.dart';
 
 void main() {
-  runApp(const MyApp());
+  initializeDateFormatting().then((_) => runApp(const MyApp()));
 }
 
 class MyApp extends StatelessWidget {
@@ -15,10 +16,10 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'MyStock',
       theme: ThemeData(
         useMaterial3: true,
-        colorSchemeSeed: Colors.deepPurple,
+        colorSchemeSeed: const Color(0xBB2649),
         fontFamily: 'Pretendard',
       ),
       home: MyHomePage(),
@@ -94,7 +95,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     return TextField(
       controller: _searchController,
       decoration: InputDecoration(
-        hintText: 'Ticker...',
+        hintText: '종목코드...',
         contentPadding: const EdgeInsets.all(8.0),
         prefixIcon: const Icon(Icons.search),
         suffixIcon: IconButton(icon: const Icon(Icons.clear), onPressed: _searchController.clear),
@@ -105,7 +106,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           showDialog(
             context: context,
             builder: (BuildContext context) => AlertDialog(
-              title: const Text('Ticker'),
+              title: const Text('종목코드'),
               content: FutureBuilder(
                   future: YahooFinance.searchStock(searchText),
                   builder: (BuildContext context, AsyncSnapshot<List<Stock>> snapshot) {
@@ -147,7 +148,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   }),
               actions: [
                 TextButton(
-                  child: const Text('Cancel'),
+                  child: const Text('취소'),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
@@ -180,19 +181,19 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 showDialog(
                   context: context,
                   builder: (BuildContext context) => AlertDialog(
-                    title: const Text('New List'),
+                    title: const Text('새 목록'),
                     content: TextField(
                       controller: textFieldController,
-                      decoration: const InputDecoration(hintText: 'List Name'),
+                      decoration: const InputDecoration(hintText: '목록 이름'),
                       autofocus: true,
                     ),
                     actions: [
                       TextButton(
-                        child: const Text('Cancel'),
+                        child: const Text('취소'),
                         onPressed: () => Navigator.pop(context),
                       ),
                       TextButton(
-                        child: const Text('Ok'),
+                        child: const Text('생성'),
                         onPressed: () async {
                           var portfolioName = textFieldController.text;
                           if (portfolioName.isNotEmpty) {
@@ -250,11 +251,17 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                         children: [
                           Text(
                             priceFormat.format(stock.price.value),
-                            style: const TextStyle(fontSize: 16, fontStyle: FontStyle.normal, fontWeight: FontWeight.w500),
+                            style: const TextStyle(color: Colors.black87, fontSize: 14, fontWeight: FontWeight.normal),
                           ),
                           Text(
                             priceChangesFormat.format(stock.price.changes),
-                            style: TextStyle(color: stock.price.changes > 0 ? Colors.red : Colors.indigo, fontSize: 16),
+                            style: TextStyle(
+                              color: stock.price.changes >= 0
+                                  ? (stock.price.changes >= 0.05 ? Colors.redAccent[400] : Colors.red[700])
+                                  : (stock.price.changes <= -0.05 ? Colors.indigoAccent[400] : Colors.indigo),
+                              fontSize: 14,
+                              fontWeight: FontWeight.normal,
+                            ),
                           ),
                         ],
                       );
@@ -301,7 +308,8 @@ class _MyCalendarPageState extends State<MyCalendarPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Earnings Calendar'),
+        title: const Text('실적 발표 예정일'),
+        centerTitle: true,
       ),
       body: FutureBuilder(
         future: Future(() async {
@@ -317,11 +325,25 @@ class _MyCalendarPageState extends State<MyCalendarPage> {
             return Column(
               children: [
                 TableCalendar(
+                  locale: 'ko_KR',
                   firstDay: DateTime.utc(2023, 1, 1),
                   lastDay: DateTime.utc(2024, 12, 31),
                   focusedDay: _focusedDay,
                   headerStyle: const HeaderStyle(titleCentered: true, formatButtonVisible: false),
-                  calendarFormat: CalendarFormat.month,
+                  calendarStyle: CalendarStyle(
+                    markerDecoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    todayDecoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondary.withAlpha(128),
+                      shape: BoxShape.circle,
+                    ),
+                    selectedDecoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondary.withAlpha(240),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
                   selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
                   onDaySelected: (selectedDay, focusedDay) {
                     setState(() {
@@ -352,7 +374,7 @@ class _MyCalendarPageState extends State<MyCalendarPage> {
               ],
             );
           }
-          return const CircularProgressIndicator();
+          return const Center(child: CircularProgressIndicator());
         },
       ),
     );
