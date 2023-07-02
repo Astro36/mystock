@@ -1,21 +1,22 @@
+import 'dart:collection';
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../model.dart';
-import '../repository.dart';
 
-class MyCalendarPage extends StatefulWidget {
-  List<Stock> stocks;
+class MyEarningsCalendarPage extends StatefulWidget {
+  final List<Stock> stocks;
 
-  MyCalendarPage({super.key, required this.stocks});
+  const MyEarningsCalendarPage({super.key, required this.stocks});
 
   @override
-  _MyCalendarPageState createState() => _MyCalendarPageState();
+  _MyEarningsCalendarPageState createState() => _MyEarningsCalendarPageState();
 }
 
-class _MyCalendarPageState extends State<MyCalendarPage> {
+class _MyEarningsCalendarPageState extends State<MyEarningsCalendarPage> {
+  DateTime _selectedDay = DateTime.utc(1970);
+  List<Stock> _selectedDayEvents = [];
   DateTime _focusedDay = DateTime.now();
-  DateTime? _selectedDay;
-  List<Stock> _selectedEvents = [];
 
   @override
   Widget build(BuildContext context) {
@@ -26,60 +27,64 @@ class _MyCalendarPageState extends State<MyCalendarPage> {
       ),
       body: FutureBuilder(
         future: Future(() async {
-          for (var stock in widget.stocks) {
-            if (DateTime.timestamp().difference(stock.earningsDatesUpdatedAt).inDays > 7) {
-              stock.earningsDates = await YahooFinance.fetchStockEarningsDate(stock.ticker);
-            }
+          var stocks = LinkedHashMap<DateTime, List<Stock>>(
+            equals: isSameDay,
+            hashCode: (key) => key.year * 10000 + key.month * 100 + key.day,
+          );
+          for (Stock stock in widget.stocks) {
+            stocks.update(await stock.earningsDates, (list) => list..add(stock), ifAbsent: () => [stock]);
           }
-          return widget.stocks;
+          return stocks;
         }),
-        builder: (BuildContext context, AsyncSnapshot<List<Stock>> snapshot) {
+        builder: (BuildContext context, AsyncSnapshot<Map<DateTime, List<Stock>>> snapshot) {
           if (snapshot.hasData) {
+            final stockEarnings = snapshot.data!;
+            final now = DateTime.now();
             return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 TableCalendar(
-                  locale: 'ko_KR',
-                  firstDay: DateTime.utc(2023, 1, 1),
-                  lastDay: DateTime.utc(2024, 12, 31),
+                  firstDay: DateTime.utc(now.year, 1, 1),
                   focusedDay: _focusedDay,
-                  headerStyle: const HeaderStyle(titleCentered: true, formatButtonVisible: false),
-                  calendarStyle: CalendarStyle(
-                    markerDecoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary,
-                      shape: BoxShape.circle,
-                    ),
-                    todayDecoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondary.withAlpha(128),
-                      shape: BoxShape.circle,
-                    ),
-                    selectedDecoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondary.withAlpha(240),
-                      shape: BoxShape.circle,
-                    ),
+                  lastDay: DateTime.utc(now.year + 1, 12, 31),
+                  locale: 'ko_KR',
+                  headerStyle: HeaderStyle(
+                    titleCentered: true,
+                    formatButtonVisible: false,
+                    titleTextStyle: Theme.of(context).textTheme.titleMedium!,
                   ),
-                  selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                  onDaySelected: (selectedDay, focusedDay) {
+                  calendarStyle: CalendarStyle(
+                    markerDecoration: _buildCircleDecoration(Theme.of(context).colorScheme.primary),
+                    todayDecoration: _buildCircleDecoration(Theme.of(context).colorScheme.secondary.withAlpha(128)),
+                    selectedDecoration: _buildCircleDecoration(Theme.of(context).colorScheme.secondary.withAlpha(240)),
+                  ),
+                  eventLoader: (DateTime day) => stockEarnings[day] ?? [],
+                  selectedDayPredicate: (DateTime day) => isSameDay(_selectedDay, day),
+                  onDaySelected: (DateTime selectedDay, DateTime focusedDay) {
                     setState(() {
                       _selectedDay = selectedDay;
-                      _focusedDay = focusedDay;
+                      _selectedDayEvents = stockEarnings[selectedDay] ?? [];
                     });
-                    _selectedEvents = widget.stocks.where((stock) => isSameDay(stock.earningsDates, selectedDay)).toList();
+                    _focusedDay = focusedDay;
                   },
                   onPageChanged: (focusedDay) {
                     _focusedDay = focusedDay;
                   },
-                  eventLoader: (DateTime day) {
-                    return widget.stocks.where((stock) => isSameDay(stock.earningsDates, day)).map((stock) => stock.ticker).toList();
-                  },
                 ),
-                const SizedBox(height: 8.0),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: Text(
+                    _selectedDay.year > 1970 ? '${DateFormat.yMMMd('ko_KR').format(_selectedDay)} 발표' : '',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
                 Expanded(
                   child: ListView.builder(
-                    itemCount: _selectedEvents.length,
+                    itemCount: _selectedDayEvents.length,
                     itemBuilder: (context, index) {
                       return ListTile(
-                        title: Text(_selectedEvents[index].ticker),
-                        subtitle: Text(_selectedEvents[index].name),
+                        title: Text(_selectedDayEvents[index].ticker),
+                        subtitle: Text(_selectedDayEvents[index].name),
                       );
                     },
                   ),
@@ -91,5 +96,9 @@ class _MyCalendarPageState extends State<MyCalendarPage> {
         },
       ),
     );
+  }
+
+  BoxDecoration _buildCircleDecoration(Color color) {
+    return BoxDecoration(color: color, shape: BoxShape.circle);
   }
 }

@@ -1,13 +1,14 @@
 import 'package:equatable/equatable.dart';
+import './repository.dart';
 
 class Stock extends Equatable {
   final String ticker;
   final String name;
   final String exchange;
   StockPrice _price = StockPrice('USD', 0, 0);
-  DateTime priceUpdatedAt = DateTime.utc(1970);
-  DateTime _earningsDates = DateTime.utc(1970);
-  DateTime earningsDatesUpdatedAt = DateTime.utc(1970);
+  DateTime _priceUpdatedAt = DateTime.utc(1970);
+  DateTime _earningsDate = DateTime.utc(1970);
+  DateTime _earningsDateUpdatedAt = DateTime.utc(1970);
 
   Stock({
     required this.ticker,
@@ -20,34 +21,48 @@ class Stock extends Equatable {
         name = json['name'] as String,
         exchange = json['exchange'] as String,
         _price = StockPrice(json['priceCurrency'] as String, json['price'] as double, json['priceChanges'] as double),
-        priceUpdatedAt = DateTime.parse(json['priceUpdatedAt'] as String),
-        _earningsDates = DateTime.parse(json['earningsDates'] as String),
-        earningsDatesUpdatedAt = DateTime.parse(json['earningsDatesUpdatedAt'] as String);
+        _priceUpdatedAt = DateTime.parse(json['priceUpdatedAt'] as String),
+        _earningsDate = DateTime.parse(json['earningsDates'] as String),
+        _earningsDateUpdatedAt = DateTime.parse(json['earningsDateUpdatedAt'] as String);
 
   Map<String, dynamic> toJson() => {
         'ticker': ticker,
         'name': name,
         'exchange': exchange,
-        'priceCurrency': price.currency,
-        'price': price.value,
-        'priceChanges': price.changes,
-        'priceUpdatedAt': priceUpdatedAt.toString(),
-        'earningsDates': earningsDates.toString(),
-        'earningsDatesUpdatedAt': earningsDatesUpdatedAt.toString(),
+        'priceCurrency': _price.currency,
+        'price': _price.value,
+        'priceChanges': _price.changes,
+        'priceUpdatedAt': _priceUpdatedAt.toString(),
+        'earningsDates': _earningsDate.toString(),
+        'earningsDateUpdatedAt': _earningsDateUpdatedAt.toString(),
       };
 
-  StockPrice get price => _price;
-
-  set price(StockPrice price) {
-    _price = price;
-    priceUpdatedAt = DateTime.timestamp();
+  Future<StockPrice> get price async {
+    if (DateTime.timestamp().difference(_priceUpdatedAt).inSeconds > 60) {
+      _price = await YahooFinance.fetchStockPrice(ticker);
+      _priceUpdatedAt = DateTime.timestamp();
+    }
+    return _price;
   }
 
-  DateTime get earningsDates => _earningsDates;
+  Future<DateTime> get earningsDates async {
+    if (DateTime.timestamp().difference(_earningsDateUpdatedAt).inDays > 7) {
+      _earningsDate = await YahooFinance.fetchStockEarningsDate(ticker);
+      _earningsDateUpdatedAt = DateTime.timestamp();
+    }
+    return _earningsDate;
+  }
 
-  set earningsDates(DateTime earningsDates) {
-    _earningsDates = earningsDates;
-    earningsDatesUpdatedAt = DateTime.timestamp();
+  Future<StockPrice> updatePrice() async {
+    _price = await YahooFinance.fetchStockPrice(ticker);
+    _priceUpdatedAt = DateTime.timestamp();
+    return _price;
+  }
+
+  Future<DateTime> updateEarningsDates() async {
+    _earningsDate = await YahooFinance.fetchStockEarningsDate(ticker);
+    _earningsDateUpdatedAt = DateTime.timestamp();
+    return _earningsDate;
   }
 
   @override

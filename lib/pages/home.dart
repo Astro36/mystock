@@ -53,7 +53,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                         context,
                         MaterialPageRoute(
                             builder: (BuildContext context) =>
-                                MyCalendarPage(stocks: _portfolios.map((e) => e.stocks.toSet()).reduce((value, element) => value.union(element)).toList())));
+                                MyEarningsCalendarPage(stocks: _portfolios.map((e) => e.stocks.toSet()).reduce((value, element) => value.union(element)).toList())));
                   },
                 )
               ],
@@ -220,29 +220,25 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               title: Text(stock.ticker),
               subtitle: Text(stock.name),
               trailing: FutureBuilder(
-                future: Future(() async {
-                  if (DateTime.timestamp().difference(stock.priceUpdatedAt).inSeconds > 60) {
-                    stock.price = await YahooFinance.fetchStockPrice(stock.ticker);
-                  }
-                  return stock.price;
-                }),
+                future: stock.price,
                 builder: (BuildContext context, AsyncSnapshot<StockPrice> snapshot) {
                   if (snapshot.hasData) {
-                    final priceFormat = NumberFormat.simpleCurrency(name: stock.price.currency);
-                    final priceChangesFormat = NumberFormat('+###.##%;-###.##%;');
+                    final price = snapshot.data!;
+                    final priceFormat = NumberFormat.simpleCurrency(name: price.currency);
+                    final priceChangesFormat = NumberFormat('+###.##%;-###.##%');
                     return Wrap(
                       spacing: 8,
                       children: [
                         Text(
-                          priceFormat.format(stock.price.value),
+                          priceFormat.format(price.value),
                           style: const TextStyle(color: Colors.black87, fontSize: 14, fontWeight: FontWeight.normal),
                         ),
                         Text(
-                          priceChangesFormat.format(stock.price.changes),
+                          priceChangesFormat.format(price.changes),
                           style: TextStyle(
-                            color: stock.price.changes >= 0
-                                ? (stock.price.changes >= 0.1 ? Colors.redAccent[400] : Colors.red[700])
-                                : (stock.price.changes <= -0.1 ? Colors.indigoAccent[400] : Colors.indigo),
+                            color: price.changes >= 0
+                                ? (price.changes >= 0.1 ? Colors.redAccent[400] : Colors.red[700])
+                                : (price.changes <= -0.1 ? Colors.indigoAccent[400] : Colors.indigo),
                             fontSize: 14,
                             fontWeight: FontWeight.normal,
                           ),
@@ -254,7 +250,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 },
               ),
               onTap: () async {
-                stock.price = await YahooFinance.fetchStockPrice(stock.ticker);
+                await stock.updatePrice();
                 await _storage.save(_portfolios);
                 setState(() {});
               },
