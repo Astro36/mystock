@@ -26,10 +26,7 @@ class _MyEarningsCalendarPageState extends State<MyEarningsCalendarPage> {
       appBar: AppBar(title: const Text('실적 발표 예정일'), centerTitle: true),
       body: FutureBuilder(
         future: Future(() async {
-          var stocks = LinkedHashMap<DateTime, List<Stock>>(
-            equals: isSameDay,
-            hashCode: (key) => key.year * 10000 + key.month * 100 + key.day,
-          );
+          var stocks = LinkedHashMap<DateTime, List<Stock>>(equals: isSameDay, hashCode: _hashDate);
           for (Stock stock in widget.stocks) {
             stocks.update(await stock.earningsDates, (list) => list..add(stock), ifAbsent: () => [stock]);
           }
@@ -37,7 +34,7 @@ class _MyEarningsCalendarPageState extends State<MyEarningsCalendarPage> {
         }),
         builder: (BuildContext context, AsyncSnapshot<Map<DateTime, List<Stock>>> snapshot) {
           if (snapshot.hasData) {
-            final stockEarnings = snapshot.data!;
+            final stockEarnings = snapshot.requireData;
             final now = DateTime.now();
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,10 +89,14 @@ class _MyEarningsCalendarPageState extends State<MyEarningsCalendarPage> {
             );
           } else if (snapshot.hasError) {
             return const Center(
-              child: Row(children: [
-                Icon(Icons.error_outline),
-                Text('정보를 불러오는 중에 문제가 발생했어요.'),
-              ]),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline),
+                  SizedBox(width: 8.0),
+                  Text('정보를 불러오는 중에 문제가 발생했어요.'),
+                ],
+              ),
             );
           }
           return const Center(child: CircularProgressIndicator());
@@ -108,3 +109,5 @@ class _MyEarningsCalendarPageState extends State<MyEarningsCalendarPage> {
     return BoxDecoration(color: color, shape: BoxShape.circle);
   }
 }
+
+int _hashDate(DateTime date) => date.year * 10000 + date.month * 100 + date.day;

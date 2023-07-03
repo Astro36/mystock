@@ -55,15 +55,15 @@ class Stock extends Equatable {
   }
 
   Future<StockPrice> updatePrice() async {
-    _price = await YahooFinance.fetchStockPrice(ticker);
     _priceUpdatedAt = DateTime.timestamp();
+    _price = await YahooFinance.fetchStockPrice(ticker);
     priceCurrency = _price.currency;
     return _price;
   }
 
   Future<DateTime> updateEarningsDates() async {
-    _earningsDate = await YahooFinance.fetchStockEarningsDate(ticker);
     _earningsDateUpdatedAt = DateTime.timestamp();
+    _earningsDate = await YahooFinance.fetchStockEarningsDate(ticker);
     return _earningsDate;
   }
 
