@@ -1,8 +1,10 @@
 import 'dart:collection';
+
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
-import '../model.dart';
+
+import 'package:mystock/models/stock.dart';
 
 class MyEarningsCalendarPage extends StatefulWidget {
   final List<Stock> stocks;
@@ -87,6 +89,13 @@ class _MyEarningsCalendarPageState extends State<MyEarningsCalendarPage> {
                   ),
                 ),
               ],
+            );
+          } else if (snapshot.hasError) {
+            return const Center(
+              child: Row(children: [
+                Icon(Icons.error_outline),
+                Text('정보를 불러오는 중에 문제가 발생했어요.'),
+              ]),
             );
           }
           return const Center(child: CircularProgressIndicator());

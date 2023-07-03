@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
-import './repository.dart';
+
+import 'package:mystock/models/repository.dart';
 
 class Stock extends Equatable {
   final String ticker;
@@ -40,14 +41,14 @@ class Stock extends Equatable {
       };
 
   Future<StockPrice> get price async {
-    if (DateTime.timestamp().difference(_priceUpdatedAt).inSeconds > 60) {
+    if (DateTime.timestamp().difference(_priceUpdatedAt).inMinutes >= 5) {
       await updatePrice();
     }
     return _price;
   }
 
   Future<DateTime> get earningsDates async {
-    if (DateTime.timestamp().difference(_earningsDateUpdatedAt).inDays > 7) {
+    if (DateTime.timestamp().difference(_earningsDateUpdatedAt).inDays >= 7) {
       await updateEarningsDates();
     }
     return _earningsDate;
@@ -76,32 +77,4 @@ class StockPrice {
   double changes;
 
   StockPrice(this.currency, this.value, this.changes);
-}
-
-class Portfolio {
-  String name;
-  List<Stock> stocks;
-
-  Portfolio({
-    required this.name,
-    required this.stocks,
-  });
-
-  Portfolio.fromJson(Map<String, dynamic> json)
-      : name = json['name'] as String,
-        stocks = (json['stocks'] as List).map((e) => Stock.fromJson(e as Map<String, dynamic>)).toList();
-
-  Map<String, dynamic> toJson() => {
-        'name': name,
-        'stocks': stocks.map((e) => e.toJson()).toList(),
-      };
-
-  void sortStocks() {
-    stocks.sort((Stock a, Stock b) {
-      if (a.priceCurrency != b.priceCurrency) {
-        return b.priceCurrency.compareTo(a.priceCurrency);
-      }
-      return a.ticker.compareTo(b.ticker);
-    });
-  }
 }

@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-import './model.dart';
+
+import 'package:mystock/models/stock.dart';
+import 'package:mystock/models/stocklist.dart';
 
 class Storage {
   Future<String> get _localPath async {
@@ -15,18 +18,18 @@ class Storage {
     return File('$path/stocks.json');
   }
 
-  Future<List<Portfolio>> load() async {
+  Future<List<StockList>> load() async {
     try {
       final file = await _localFile;
       final content = await file.readAsString();
       final portfolios = jsonDecode(content) as List<dynamic>;
-      return portfolios.map((e) => Portfolio.fromJson(e)).toList();
+      return portfolios.map((e) => StockList.fromJson(e)).toList();
     } catch (e) {
-      return [Portfolio(name: '관심', stocks: [])];
+      return [StockList(name: '관심', stocks: [])];
     }
   }
 
-  Future<File> save(List<Portfolio> portfolios) async {
+  Future<File> save(List<StockList> portfolios) async {
     final file = await _localFile;
     return file.writeAsString(jsonEncode(portfolios));
   }

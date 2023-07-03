@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import './calendar.dart';
-import '../model.dart';
-import '../repository.dart';
+
+import 'package:mystock/models/stock.dart';
+import 'package:mystock/models/stocklist.dart';
+import 'package:mystock/models/repository.dart';
+import 'package:mystock/pages/calendar.dart';
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key});
@@ -13,7 +15,7 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   final Storage _storage = Storage();
-  late List<Portfolio> _portfolios;
+  late List<StockList> _portfolios;
 
   final TextEditingController _searchController = TextEditingController();
   late TabController? _tabController;
@@ -36,7 +38,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     return FutureBuilder(
       future: _storage.load(),
-      builder: (BuildContext context, AsyncSnapshot<List<Portfolio>> snapshot) {
+      builder: (BuildContext context, AsyncSnapshot<List<StockList>> snapshot) {
         if (snapshot.hasData) {
           _portfolios = snapshot.data!;
           _tabController = TabController(length: _portfolios.length, vsync: this);
@@ -72,8 +74,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     return TextField(
       controller: _searchController,
       decoration: InputDecoration(
-        hintText: '종목코드',
-        contentPadding: const EdgeInsets.all(8.0),
+        hintText: '종목 검색',
+        isDense: true,
         prefixIcon: const Icon(Icons.search),
         suffixIcon: IconButton(icon: const Icon(Icons.clear), onPressed: _searchController.clear),
         border: const OutlineInputBorder(),
@@ -88,7 +90,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   future: YahooFinance.searchStock(searchText),
                   builder: (BuildContext context, AsyncSnapshot<List<Stock>> snapshot) {
                     if (snapshot.hasData) {
-                      List<Stock> result = snapshot.data!;
+                      List<Stock> result = snapshot.requireData;
+                      if (result.isEmpty) {
+                        return const ListTile(
+                          leading: Icon(Icons.info_outline),
+                          title: Text('종목을 찾을 수 없어요.'),
+                          subtitle: Text('종목 코드가 올바른지 확인해 주세요.'),
+                        );
+                      }
                       return SizedBox(
                         width: 560, // default max size
                         child: ListView.builder(
@@ -105,14 +114,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                 if (!portfolio.stocks.map((e) => e.ticker).contains(stock.ticker)) {
                                   await stock.price;
                                   portfolio.stocks.add(stock);
-                                  portfolio.sortStocks();
+                                  portfolio.sort();
                                   await _storage.save(_portfolios);
                                   setState(() {
                                     _focusedTabIndex = _tabController!.index;
                                     _searchController.clear();
                                   });
                                 } else {
-                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('이미 목록에 추가된 종목입니다.')));
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록에 이미 추가된 종목이에요.')));
                                 }
                                 // use_build_context_synchronously
                                 if (context.mounted) {
@@ -122,6 +131,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                             );
                           },
                         ),
+                      );
+                    } else if (snapshot.hasError) {
+                      return const ListTile(
+                        leading: Icon(Icons.error_outline),
+                        title: Text('종목을 찾을 수 없어요.'),
+                        subtitle: Text('종목 코드나 영어 이름으로 검색해 주세요.'),
                       );
                     }
                     return const Center(child: CircularProgressIndicator());
@@ -177,7 +192,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                         onPressed: () async {
                           var portfolioName = textFieldController.text;
                           if (portfolioName.isNotEmpty) {
-                            _portfolios.add(Portfolio(name: portfolioName, stocks: []));
+                            _portfolios.add(StockList(name: portfolioName, stocks: []));
                             await _storage.save(_portfolios);
                             setState(() {
                               _focusedTabIndex = _tabController!.length;
@@ -243,7 +258,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                                   child: const Text('확인'),
                                                   onPressed: () async {
                                                     var portfolioName = textFieldController.text;
-                                                    print(portfolioName);
                                                     if (portfolioName.isNotEmpty) {
                                                       _portfolios[index].name = portfolioName;
                                                       _storage.save(_portfolios);
@@ -309,7 +323,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   Widget _buildTabBarView() {
     return TabBarView(
       controller: _tabController,
-      children: _portfolios.map((Portfolio portfolio) {
+      children: _portfolios.map((StockList portfolio) {
         return ListView.builder(
           itemCount: portfolio.stocks.length,
           itemBuilder: (BuildContext context, int index) {
@@ -347,6 +361,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   return const CircularProgressIndicator();
                 },
               ),
+              // isThreeLine: true,
               onTap: () async {
                 await stock.updatePrice();
                 await _storage.save(_portfolios);
@@ -357,7 +372,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   context: context,
                   builder: (BuildContext context) => AlertDialog(
                     title: const Text('종목 삭제'),
-                    content: const Text('해당 종목을 목록에서 삭제합니다.'),
+                    content: const Text('해당 종목을 목록에서 삭제할까요?'),
                     actions: [
                       TextButton(
                         child: const Text('취소'),
