@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
+import 'package:hive_flutter/adapters.dart';
 import 'package:intl/intl.dart';
 
 import 'package:mystock/models/stock.dart';
-import 'package:mystock/models/stocklist.dart';
 import 'package:mystock/models/repository.dart';
 import 'package:mystock/pages/calendar.dart';
 
@@ -14,8 +15,7 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
-  final Storage _storage = Storage();
-  late List<StockList> _portfolios;
+  final Box<StockList> _stockListBox = Hive.box('stockLists');
 
   final TextEditingController _searchController = TextEditingController();
   late TabController? _tabController;
@@ -36,36 +36,28 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
-      future: _storage.load(),
-      builder: (BuildContext context, AsyncSnapshot<List<StockList>> snapshot) {
-        if (snapshot.hasData) {
-          _portfolios = snapshot.data!;
-          _tabController = TabController(length: _portfolios.length, vsync: this);
-          _tabController?.index = _focusedTabIndex;
-          return Scaffold(
-            appBar: AppBar(
-              title: _buildSearchField(),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.calendar_month),
-                  onPressed: () {
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (BuildContext context) => MyEarningsCalendarPage(
-                                stocks: _portfolios.map((e) => e.stocks.toSet()).reduce((value, element) => value.union(element)).toList())));
-                  },
-                )
-              ],
-              bottom: PreferredSize(preferredSize: const Size.fromHeight(kTextTabBarHeight), child: _buildTabBar()),
-              toolbarHeight: kToolbarHeight + 16.0,
-            ),
-            body: _buildTabBarView(),
-          );
-        } else {
-          return const Center(child: CircularProgressIndicator());
-        }
+    return ValueListenableBuilder(
+      valueListenable: _stockListBox.listenable(),
+      builder: (BuildContext context, Box<StockList> stockListBox, _) {
+        _tabController = TabController(length: stockListBox.values.length, vsync: this);
+        _tabController?.index = _focusedTabIndex;
+        _tabController?.addListener(() {
+          _focusedTabIndex = _tabController!.index;
+        });
+        return Scaffold(
+          appBar: AppBar(
+            title: _buildSearchField(),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.calendar_month),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (BuildContext context) => const MyEarningsCalendarPage())),
+              )
+            ],
+            bottom: PreferredSize(preferredSize: const Size.fromHeight(kTextTabBarHeight), child: _buildTabBar()),
+            toolbarHeight: kToolbarHeight + 16.0,
+          ),
+          body: _buildTabBarView(),
+        );
       },
     );
   }
@@ -82,73 +74,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       ),
       onSubmitted: (String searchText) {
         if (searchText.isNotEmpty) {
-          showDialog(
-            context: context,
-            builder: (BuildContext context) => AlertDialog(
-              title: const Text('종목 추가'),
-              content: FutureBuilder(
-                  future: YahooFinance.searchStock(searchText),
-                  builder: (BuildContext context, AsyncSnapshot<List<Stock>> snapshot) {
-                    if (snapshot.hasData) {
-                      List<Stock> result = snapshot.requireData;
-                      if (result.isEmpty) {
-                        return const ListTile(
-                          leading: Icon(Icons.info_outline),
-                          title: Text('종목을 찾을 수 없어요.'),
-                          subtitle: Text('종목 코드가 올바른지 확인해 주세요.'),
-                        );
-                      }
-                      return SizedBox(
-                        width: 560, // default max size
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: result.length,
-                          itemBuilder: (BuildContext context, int index) {
-                            final portfolio = _portfolios[_tabController!.index];
-                            final stock = result[index];
-                            return ListTile(
-                              title: Text(stock.ticker),
-                              subtitle: Text(stock.name),
-                              trailing: Text(stock.exchange),
-                              onTap: () async {
-                                if (!portfolio.stocks.map((e) => e.ticker).contains(stock.ticker)) {
-                                  await stock.price;
-                                  portfolio.stocks.add(stock);
-                                  portfolio.sort();
-                                  await _storage.save(_portfolios);
-                                  setState(() {
-                                    _focusedTabIndex = _tabController!.index;
-                                    _searchController.clear();
-                                  });
-                                } else {
-                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록에 이미 추가된 종목이에요.')));
-                                }
-                                // use_build_context_synchronously
-                                if (context.mounted) {
-                                  Navigator.pop(context);
-                                }
-                              },
-                            );
-                          },
-                        ),
-                      );
-                    } else if (snapshot.hasError) {
-                      return const ListTile(
-                        leading: Icon(Icons.error_outline),
-                        title: Text('종목을 찾을 수 없어요.'),
-                        subtitle: Text('종목 코드나 영어 이름으로 검색해 주세요.'),
-                      );
-                    }
-                    return const Center(child: CircularProgressIndicator());
-                  }),
-              actions: [
-                TextButton(
-                  child: const Text('취소'),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-          );
+          _showSearchResultDialog(searchText);
         }
       },
     );
@@ -162,159 +88,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           Flexible(
             fit: FlexFit.loose,
             child: TabBar(
-              tabs: _portfolios.map((e) => Tab(child: Text(e.name))).toList(),
+              tabs: _stockListBox.values.map((StockList stockList) => Tab(child: Text(stockList.name))).toList(),
               controller: _tabController,
               isScrollable: true,
               dividerColor: Colors.transparent,
             ),
           ),
-          Tab(
-            child: IconButton(
-              icon: const Icon(Icons.add),
-              onPressed: () {
-                TextEditingController textFieldController = TextEditingController();
-                showDialog(
-                  context: context,
-                  builder: (BuildContext context) => AlertDialog(
-                    title: const Text('새 목록'),
-                    content: TextField(
-                      controller: textFieldController,
-                      decoration: const InputDecoration(hintText: '목록 이름'),
-                      autofocus: true,
-                    ),
-                    actions: [
-                      TextButton(
-                        child: const Text('취소'),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                      TextButton(
-                        child: const Text('생성'),
-                        onPressed: () async {
-                          var portfolioName = textFieldController.text;
-                          if (portfolioName.isNotEmpty) {
-                            _portfolios.add(StockList(name: portfolioName, stocks: []));
-                            await _storage.save(_portfolios);
-                            setState(() {
-                              _focusedTabIndex = _tabController!.length;
-                            });
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록 이름을 입력하세요.')));
-                          }
-                          // use_build_context_synchronously
-                          if (context.mounted) {
-                            Navigator.pop(context);
-                          }
-                        },
-                      )
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-          Tab(
-            child: IconButton(
-              icon: const Icon(Icons.edit_note),
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (BuildContext context) => AlertDialog(
-                    title: const Text('목록 수정'),
-                    content: StatefulBuilder(
-                      builder: (_, StateSetter setStateInner) {
-                        return SizedBox(
-                          width: 560, // default max size
-                          child: ReorderableListView(
-                            buildDefaultDragHandles: false,
-                            children: [
-                              for (int index = 0; index < _portfolios.length; index += 1)
-                                ListTile(
-                                  key: Key(index.toString()),
-                                  title: Text(_portfolios[index].name),
-                                  tileColor: const Color(0xFFF6E2EA),
-                                  leading: ReorderableDragStartListener(index: index, child: const Icon(Icons.drag_handle)),
-                                  trailing: Wrap(
-                                    spacing: 8,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.edit),
-                                        onPressed: () {
-                                          TextEditingController textFieldController = TextEditingController();
-                                          showDialog(
-                                            context: context,
-                                            builder: (BuildContext context) => AlertDialog(
-                                              title: const Text('목록 이름 변경'),
-                                              content: TextField(
-                                                controller: textFieldController,
-                                                decoration: const InputDecoration(hintText: '목록 이름'),
-                                                autofocus: true,
-                                              ),
-                                              actions: [
-                                                TextButton(
-                                                  child: const Text('취소'),
-                                                  onPressed: () => Navigator.pop(context),
-                                                ),
-                                                TextButton(
-                                                  child: const Text('확인'),
-                                                  onPressed: () async {
-                                                    var portfolioName = textFieldController.text;
-                                                    if (portfolioName.isNotEmpty) {
-                                                      _portfolios[index].name = portfolioName;
-                                                      _storage.save(_portfolios);
-                                                      setState(() {});
-                                                      setStateInner(() {});
-                                                    } else {
-                                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록 이름을 입력하세요.')));
-                                                    }
-                                                    // use_build_context_synchronously
-                                                    if (context.mounted) {
-                                                      Navigator.pop(context);
-                                                    }
-                                                  },
-                                                )
-                                              ],
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.clear),
-                                        onPressed: () {
-                                          _portfolios.remove(_portfolios[index]);
-                                          _storage.save(_portfolios);
-                                          setState(() {});
-                                          setStateInner(() {});
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                )
-                            ],
-                            onReorder: (int oldIndex, int newIndex) {
-                              if (oldIndex < newIndex) {
-                                newIndex -= 1;
-                              }
-                              final item = _portfolios.removeAt(oldIndex);
-                              _portfolios.insert(newIndex, item);
-                              _storage.save(_portfolios);
-                              setState(() {});
-                              setStateInner(() {});
-                            },
-                          ),
-                        );
-                      },
-                    ),
-                    actions: [
-                      TextButton(
-                        child: const Text('확인'),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
+          Tab(child: IconButton(icon: const Icon(Icons.add), onPressed: _showNewListDialog)),
+          Tab(child: IconButton(icon: const Icon(Icons.edit_note), onPressed: _showEditListDialog)),
         ],
       ),
     );
@@ -323,11 +104,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   Widget _buildTabBarView() {
     return TabBarView(
       controller: _tabController,
-      children: _portfolios.map((StockList portfolio) {
+      children: _stockListBox.values.map((StockList stockList) {
         return ListView.builder(
-          itemCount: portfolio.stocks.length,
+          itemCount: stockList.stocks.length,
           itemBuilder: (BuildContext context, int index) {
-            final stock = portfolio.stocks[index];
+            final stock = stockList.stocks[index];
             return ListTile(
               title: Text(stock.ticker),
               subtitle: Text(stock.name),
@@ -361,11 +142,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   return const CircularProgressIndicator();
                 },
               ),
-              // isThreeLine: true,
               onTap: () async {
                 await stock.updatePrice();
-                await _storage.save(_portfolios);
-                setState(() {});
+                _stockListBox.putAt(_focusedTabIndex, stockList);
               },
               onLongPress: () {
                 showDialog(
@@ -380,14 +159,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       ),
                       TextButton(
                         child: const Text('삭제'),
-                        onPressed: () async {
-                          portfolio.stocks.remove(stock);
-                          _storage.save(_portfolios);
-                          setState(() {});
-                          // use_build_context_synchronously
-                          if (context.mounted) {
-                            Navigator.pop(context);
-                          }
+                        onPressed: () {
+                          stockList.stocks.remove(stock);
+                          _stockListBox.putAt(_focusedTabIndex, stockList);
+                          Navigator.pop(context);
                         },
                       ),
                     ],
@@ -400,4 +175,204 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       }).toList(),
     );
   }
+
+  void _showSearchResultDialog(String searchText) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('종목 추가'),
+        content: FutureBuilder(
+            future: YahooFinance.searchStock(searchText),
+            builder: (BuildContext context, AsyncSnapshot<List<Stock>> snapshot) {
+              if (snapshot.hasData) {
+                List<Stock> result = snapshot.requireData;
+                if (result.isNotEmpty) {
+                  return SizedBox(
+                    width: 560, // default max width
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: result.length,
+                      itemBuilder: (BuildContext context, int index) {
+                        final selectedStock = result[index];
+                        return ListTile(
+                          title: Text(selectedStock.ticker),
+                          subtitle: Text(selectedStock.name),
+                          trailing: Text(selectedStock.exchange),
+                          onTap: () async {
+                            final stockList = _stockListBox.getAt(_focusedTabIndex)!;
+                            if (!stockList.stocks.map((e) => e.ticker).contains(selectedStock.ticker)) {
+                              await selectedStock.price;
+                              stockList.stocks.add(selectedStock);
+                              stockList.sort();
+                              _stockListBox.put(_focusedTabIndex, stockList);
+                              setState(() {
+                                _searchController.clear();
+                              });
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록에 이미 추가된 종목이에요.')));
+                            }
+                            // use_build_context_synchronously
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                            }
+                          },
+                        );
+                      },
+                    ),
+                  );
+                }
+                return const ListTile(
+                  leading: Icon(Icons.info_outline),
+                  title: Text('종목을 찾을 수 없어요.'),
+                  subtitle: Text('종목 코드가 올바른지 확인해 주세요.'),
+                );
+              } else if (snapshot.hasError) {
+                return const ListTile(
+                  leading: Icon(Icons.error_outline),
+                  title: Text('종목을 찾을 수 없어요.'),
+                  subtitle: Text('종목 코드나 영어 이름으로 검색해 주세요.'),
+                );
+              }
+              return const Center(child: CircularProgressIndicator());
+            }),
+        actions: [
+          TextButton(
+            child: const Text('취소'),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showNewListDialog() {
+    TextEditingController textFieldController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('새 목록'),
+        content: TextField(
+          controller: textFieldController,
+          decoration: const InputDecoration(hintText: '목록 이름'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            child: const Text('취소'),
+            onPressed: () => Navigator.pop(context),
+          ),
+          TextButton(
+            child: const Text('생성'),
+            onPressed: () {
+              var newListName = textFieldController.text;
+              if (newListName.isNotEmpty) {
+                _stockListBox.add(StockList(name: newListName, stocks: []));
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록 이름을 입력하세요.')));
+              }
+              Navigator.pop(context);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditListDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('목록 수정'),
+        content: StatefulBuilder(
+          builder: (_, StateSetter setStateInner) {
+            return SizedBox(
+              width: 560, // default max size
+              child: ReorderableListView(
+                buildDefaultDragHandles: false,
+                children: [
+                  for (int index = 0; index < _stockListBox.values.length; index += 1)
+                    ListTile(
+                      key: Key(index.toString()),
+                      title: Text(_stockListBox.getAt(index)!.name),
+                      tileColor: const Color(0xFFF6E2EA),
+                      leading: ReorderableDragStartListener(index: index, child: const Icon(Icons.drag_handle)),
+                      trailing: Wrap(
+                        spacing: 8,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit),
+                            onPressed: () {
+                              TextEditingController textFieldController = TextEditingController();
+                              showDialog(
+                                context: context,
+                                builder: (BuildContext context) => AlertDialog(
+                                  title: const Text('목록 이름 변경'),
+                                  content: TextField(
+                                    controller: textFieldController,
+                                    decoration: const InputDecoration(hintText: '목록 이름'),
+                                    autofocus: true,
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      child: const Text('취소'),
+                                      onPressed: () => Navigator.pop(context),
+                                    ),
+                                    TextButton(
+                                      child: const Text('확인'),
+                                      onPressed: () async {
+                                        var newListName = textFieldController.text;
+                                        if (newListName.isNotEmpty) {
+                                          _stockListBox.putAt(index, _stockListBox.getAt(index)!..name = newListName);
+                                          setStateInner(() {});
+                                        } else {
+                                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록 이름을 입력하세요.')));
+                                        }
+                                        // use_build_context_synchronously
+                                        if (context.mounted) {
+                                          Navigator.pop(context);
+                                        }
+                                      },
+                                    )
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _stockListBox.deleteAt(index);
+                              setState(() {});
+                              setStateInner(() {});
+                            },
+                          ),
+                        ],
+                      ),
+                    )
+                ],
+                onReorder: (int oldIndex, int newIndex) {
+                  if (oldIndex < newIndex) {
+                    newIndex -= 1;
+                  }
+                  final tempList = _stockListBox.getAt(oldIndex)!;
+                  _stockListBox.putAt(oldIndex, _stockListBox.getAt(newIndex)!);
+                  _stockListBox.putAt(newIndex, tempList);
+                  setState(() {});
+                  setStateInner(() {});
+                },
+              ),
+            );
+          },
+        ),
+        actions: [
+          TextButton(
+            child: const Text('확인'),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showChangeListNameDialog() {}
 }

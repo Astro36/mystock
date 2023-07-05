@@ -1,5 +1,6 @@
 import 'dart:collection';
 
+import 'package:hive/hive.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
@@ -7,15 +8,15 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:mystock/models/stock.dart';
 
 class MyEarningsCalendarPage extends StatefulWidget {
-  final List<Stock> stocks;
-
-  const MyEarningsCalendarPage({super.key, required this.stocks});
+  const MyEarningsCalendarPage({super.key});
 
   @override
   State createState() => _MyEarningsCalendarPageState();
 }
 
 class _MyEarningsCalendarPageState extends State<MyEarningsCalendarPage> {
+  final Box<StockList> _stockListBox = Hive.box('stockLists');
+
   DateTime _selectedDay = DateTime.utc(1970);
   List<Stock> _selectedDayEvents = [];
   DateTime _focusedDay = DateTime.now();
@@ -26,11 +27,13 @@ class _MyEarningsCalendarPageState extends State<MyEarningsCalendarPage> {
       appBar: AppBar(title: const Text('실적 발표 예정일'), centerTitle: true),
       body: FutureBuilder(
         future: Future(() async {
-          var stocks = LinkedHashMap<DateTime, List<Stock>>(equals: isSameDay, hashCode: _hashDate);
-          for (Stock stock in widget.stocks) {
-            stocks.update(await stock.earningsDates, (list) => list..add(stock), ifAbsent: () => [stock]);
+          List<Stock> stocks =
+              _stockListBox.values.map((StockList stockList) => stockList.stocks.toSet()).reduce((value, element) => value.union(element)).toList();
+          var stockEarnings = LinkedHashMap<DateTime, List<Stock>>(equals: isSameDay, hashCode: _hashDate);
+          for (Stock stock in stocks) {
+            stockEarnings.update(await stock.earningsDates, (list) => list..add(stock), ifAbsent: () => [stock]);
           }
-          return stocks;
+          return stockEarnings;
         }),
         builder: (BuildContext context, AsyncSnapshot<Map<DateTime, List<Stock>>> snapshot) {
           if (snapshot.hasData) {
