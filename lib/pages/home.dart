@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:hive/hive.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:intl/intl.dart';
 
@@ -25,6 +24,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    if (_stockListBox.values.isEmpty) {
+      _stockListBox.add(StockList(name: '관심', stocks: [Stock(ticker: 'AAPL', name: 'Apple Inc.', exchange: 'NMS')]));
+    }
   }
 
   @override
