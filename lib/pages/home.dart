@@ -211,8 +211,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           onTap: () async {
                             final stockList = _stockListsBox.getAt(_focusedTabIndex)!;
                             if (!stockList.tickers.contains(selectedStock.ticker)) {
-                              await selectedStock.price;
-                              _stockListsBox.put(_focusedTabIndex, stockList..tickers.add(selectedStock.ticker));
+                              stockList.tickers.add(selectedStock.ticker);
+                              sortTickers(stockList.tickers);
+                              _stockListsBox.put(_focusedTabIndex, stockList);
                               _stocksBox.put(selectedStock.ticker, selectedStock);
                               setState(() {
                                 _searchController.clear();

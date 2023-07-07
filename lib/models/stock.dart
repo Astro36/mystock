@@ -98,11 +98,13 @@ class StockList {
   });
 }
 
-void sortStockList(List<Stock> stocks) {
-  stocks.sort((Stock a, Stock b) {
-    if (a.priceCurrency != b.priceCurrency) {
-      return b.priceCurrency.compareTo(a.priceCurrency);
+void sortTickers(List<String> tickers) {
+  tickers.sort((String tickerA, String tickerB) {
+    final countryCodeA = (tickerA.split('.')..add('US'))[1];
+    final countryCodeB = (tickerB.split('.')..add('US'))[1];
+    if (countryCodeA != countryCodeB) {
+      return countryCodeA.compareTo(countryCodeB);
     }
-    return a.ticker.compareTo(b.ticker);
+    return tickerA.compareTo(tickerB);
   });
 }
