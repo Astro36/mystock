@@ -14,6 +14,7 @@ void main() async {
     ..registerAdapter(StockPriceAdapter())
     ..registerAdapter(StockListAdapter());
   await Hive.openBox<StockList>('stockLists');
+  await Hive.openBox<Stock>('stocks');
 
   runApp(const MyApp());
 }

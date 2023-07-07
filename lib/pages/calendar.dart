@@ -15,7 +15,7 @@ class MyEarningsCalendarPage extends StatefulWidget {
 }
 
 class _MyEarningsCalendarPageState extends State<MyEarningsCalendarPage> {
-  final Box<StockList> _stockListBox = Hive.box('stockLists');
+  final Box<Stock> _stocksBox = Hive.box('stocks');
 
   DateTime _selectedDay = DateTime.utc(1970);
   List<Stock> _selectedDayEvents = [];
@@ -27,11 +27,10 @@ class _MyEarningsCalendarPageState extends State<MyEarningsCalendarPage> {
       appBar: AppBar(title: const Text('실적 발표 예정일'), centerTitle: true),
       body: FutureBuilder(
         future: Future(() async {
-          List<Stock> stocks =
-              _stockListBox.values.map((StockList stockList) => stockList.stocks.toSet()).reduce((value, element) => value.union(element)).toList();
           var stockEarnings = LinkedHashMap<DateTime, List<Stock>>(equals: isSameDay, hashCode: _hashDate);
-          for (Stock stock in stocks) {
+          for (Stock stock in _stocksBox.values.toList()) {
             stockEarnings.update(await stock.earningsDates, (list) => list..add(stock), ifAbsent: () => [stock]);
+            _stocksBox.put(stock.ticker, stock);
           }
           return stockEarnings;
         }),

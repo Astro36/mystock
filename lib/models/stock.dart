@@ -84,6 +84,20 @@ class StockPrice {
   });
 }
 
+@HiveType(typeId: 2)
+class StockList {
+  @HiveField(0)
+  String name;
+
+  @HiveField(1)
+  List<String> tickers;
+
+  StockList({
+    required this.name,
+    required this.tickers,
+  });
+}
+
 void sortStockList(List<Stock> stocks) {
   stocks.sort((Stock a, Stock b) {
     if (a.priceCurrency != b.priceCurrency) {
@@ -91,27 +105,4 @@ void sortStockList(List<Stock> stocks) {
     }
     return a.ticker.compareTo(b.ticker);
   });
-}
-
-@HiveType(typeId: 2)
-class StockList {
-  @HiveField(0)
-  String name;
-
-  @HiveField(1)
-  List<Stock> stocks;
-
-  StockList({
-    required this.name,
-    required this.stocks,
-  });
-
-  void sort() {
-    stocks.sort((Stock a, Stock b) {
-      if (a.priceCurrency != b.priceCurrency) {
-        return b.priceCurrency.compareTo(a.priceCurrency);
-      }
-      return a.ticker.compareTo(b.ticker);
-    });
-  }
 }

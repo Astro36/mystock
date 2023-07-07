@@ -14,18 +14,20 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
-  final Box<StockList> _stockListBox = Hive.box('stockLists');
+  final Box<StockList> _stockListsBox = Hive.box('stockLists');
+  final Box<Stock> _stocksBox = Hive.box('stocks');
 
   final TextEditingController _searchController = TextEditingController();
-  late TabController? _tabController;
 
+  late TabController? _tabController;
   int _focusedTabIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    if (_stockListBox.values.isEmpty) {
-      _stockListBox.add(StockList(name: '관심', stocks: [Stock(ticker: 'AAPL', name: 'Apple Inc.', exchange: 'NMS')]));
+    if (_stockListsBox.values.isEmpty) {
+      _stockListsBox.add(StockList(name: '관심', tickers: ['AAPL']));
+      _stocksBox.put('AAPL', Stock(ticker: 'AAPL', name: 'Apple Inc.', exchange: 'NMS'));
     }
   }
 
@@ -39,13 +41,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder(
-      valueListenable: _stockListBox.listenable(),
+      valueListenable: _stockListsBox.listenable(),
       builder: (BuildContext context, Box<StockList> stockListBox, _) {
-        _tabController = TabController(length: stockListBox.values.length, vsync: this);
-        _tabController?.index = _focusedTabIndex;
-        _tabController?.addListener(() {
-          _focusedTabIndex = _tabController!.index;
-        });
+        _initTabController();
         return Scaffold(
           appBar: AppBar(
             title: _buildSearchField(),
@@ -62,6 +60,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         );
       },
     );
+  }
+
+  void _initTabController() {
+    _tabController = TabController(length: _stockListsBox.values.length, vsync: this);
+    _tabController?.index = _focusedTabIndex;
+    _tabController?.addListener(() {
+      _focusedTabIndex = _tabController!.index;
+    });
   }
 
   Widget _buildSearchField() {
@@ -90,7 +96,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           Flexible(
             fit: FlexFit.loose,
             child: TabBar(
-              tabs: _stockListBox.values.map((StockList stockList) => Tab(child: Text(stockList.name))).toList(),
+              tabs: _stockListsBox.values.map((StockList stockList) => Tab(child: Text(stockList.name))).toList(),
               controller: _tabController,
               isScrollable: true,
               dividerColor: Colors.transparent,
@@ -106,11 +112,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   Widget _buildTabBarView() {
     return TabBarView(
       controller: _tabController,
-      children: _stockListBox.values.map((StockList stockList) {
+      children: _stockListsBox.values.map((StockList stockList) {
         return ListView.builder(
-          itemCount: stockList.stocks.length,
+          itemCount: stockList.tickers.length,
           itemBuilder: (BuildContext context, int index) {
-            final stock = stockList.stocks[index];
+            final ticker = stockList.tickers[index];
+            final Stock stock = _stocksBox.get(ticker)!;
             return ListTile(
               title: Text(stock.ticker),
               subtitle: Text(stock.name),
@@ -146,7 +153,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               ),
               onTap: () async {
                 await stock.updatePrice();
-                _stockListBox.putAt(_focusedTabIndex, stockList);
+                _stocksBox.put(stock.ticker, stock);
+                setState(() {});
               },
               onLongPress: () {
                 showDialog(
@@ -162,8 +170,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       TextButton(
                         child: const Text('삭제'),
                         onPressed: () {
-                          stockList.stocks.remove(stock);
-                          _stockListBox.putAt(_focusedTabIndex, stockList);
+                          stockList.tickers.remove(stock.ticker);
+                          _stockListsBox.putAt(_focusedTabIndex, stockList);
                           Navigator.pop(context);
                         },
                       ),
@@ -201,12 +209,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           subtitle: Text(selectedStock.name),
                           trailing: Text(selectedStock.exchange),
                           onTap: () async {
-                            final stockList = _stockListBox.getAt(_focusedTabIndex)!;
-                            if (!stockList.stocks.map((e) => e.ticker).contains(selectedStock.ticker)) {
+                            final stockList = _stockListsBox.getAt(_focusedTabIndex)!;
+                            if (!stockList.tickers.contains(selectedStock.ticker)) {
                               await selectedStock.price;
-                              stockList.stocks.add(selectedStock);
-                              stockList.sort();
-                              _stockListBox.put(_focusedTabIndex, stockList);
+                              _stockListsBox.put(_focusedTabIndex, stockList..tickers.add(selectedStock.ticker));
+                              _stocksBox.put(selectedStock.ticker, selectedStock);
                               setState(() {
                                 _searchController.clear();
                               });
@@ -268,7 +275,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             onPressed: () {
               var newListName = textFieldController.text;
               if (newListName.isNotEmpty) {
-                _stockListBox.add(StockList(name: newListName, stocks: []));
+                _stockListsBox.add(StockList(name: newListName, tickers: []));
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록 이름을 입력하세요.')));
               }
@@ -292,10 +299,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               child: ReorderableListView(
                 buildDefaultDragHandles: false,
                 children: [
-                  for (int index = 0; index < _stockListBox.values.length; index += 1)
+                  for (int index = 0; index < _stockListsBox.values.length; index += 1)
                     ListTile(
                       key: Key(index.toString()),
-                      title: Text(_stockListBox.getAt(index)!.name),
+                      title: Text(_stockListsBox.getAt(index)!.name),
                       tileColor: const Color(0xFFF6E2EA),
                       leading: ReorderableDragStartListener(index: index, child: const Icon(Icons.drag_handle)),
                       trailing: Wrap(
@@ -324,7 +331,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                       onPressed: () async {
                                         var newListName = textFieldController.text;
                                         if (newListName.isNotEmpty) {
-                                          _stockListBox.putAt(index, _stockListBox.getAt(index)!..name = newListName);
+                                          _stockListsBox.putAt(index, _stockListsBox.getAt(index)!..name = newListName);
                                           setStateInner(() {});
                                         } else {
                                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록 이름을 입력하세요.')));
@@ -343,7 +350,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           IconButton(
                             icon: const Icon(Icons.clear),
                             onPressed: () {
-                              _stockListBox.deleteAt(index);
+                              _stockListsBox.deleteAt(index);
                               setState(() {});
                               setStateInner(() {});
                             },
@@ -356,9 +363,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   if (oldIndex < newIndex) {
                     newIndex -= 1;
                   }
-                  final tempList = _stockListBox.getAt(oldIndex)!;
-                  _stockListBox.putAt(oldIndex, _stockListBox.getAt(newIndex)!);
-                  _stockListBox.putAt(newIndex, tempList);
+                  final tempList = _stockListsBox.getAt(oldIndex)!;
+                  _stockListsBox.putAt(oldIndex, _stockListsBox.getAt(newIndex)!);
+                  _stockListsBox.putAt(newIndex, tempList);
                   setState(() {});
                   setStateInner(() {});
                 },
@@ -375,6 +382,4 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       ),
     );
   }
-
-  void _showChangeListNameDialog() {}
 }

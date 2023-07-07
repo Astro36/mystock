@@ -110,7 +110,7 @@ class StockListAdapter extends TypeAdapter<StockList> {
     };
     return StockList(
       name: fields[0] as String,
-      stocks: (fields[1] as List).cast<Stock>(),
+      tickers: (fields[1] as List).cast<String>(),
     );
   }
 
@@ -121,7 +121,7 @@ class StockListAdapter extends TypeAdapter<StockList> {
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
-      ..write(obj.stocks);
+      ..write(obj.tickers);
   }
 
   @override
