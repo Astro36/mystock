@@ -65,8 +65,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   void _initTabController() {
-    _tabController = TabController(length: _stockListsBox.values.length, vsync: this);
-    _tabController?.index = _focusedTabIndex;
+    final tabsLength = _stockListsBox.values.length;
+    _tabController = TabController(length: tabsLength, vsync: this);
+    _tabController?.index = _focusedTabIndex < tabsLength ? _focusedTabIndex : tabsLength - 1;
     _tabController?.addListener(() {
       _focusedTabIndex = _tabController!.index;
     });
@@ -293,124 +294,170 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   void _showEditListDialog() {
     showDialog(
       context: context,
-      builder: (BuildContext context) => AlertDialog(
-        title: const Text('목록 수정'),
-        content: StatefulBuilder(
-          builder: (_, StateSetter setStateInner) {
-            return SizedBox(
-              width: 560, // default max size
-              child: ReorderableListView(
-                buildDefaultDragHandles: false,
-                children: [
-                  for (int index = 0; index < _stockListsBox.values.length; index += 1)
-                    ListTile(
-                      key: Key(index.toString()),
-                      title: Text(_stockListsBox.getAt(index)!.name),
-                      tileColor: const Color(0xFFF6E2EA),
-                      leading: ReorderableDragStartListener(index: index, child: const Icon(Icons.drag_handle)),
-                      trailing: Wrap(
-                        children: [
-                          IconButton(
-                            iconSize: 20,
-                            icon: const Icon(Icons.edit),
-                            onPressed: () {
-                              TextEditingController textFieldController = TextEditingController();
-                              showDialog(
-                                context: context,
-                                builder: (BuildContext context) => AlertDialog(
-                                  title: const Text('목록 이름 변경'),
-                                  content: TextField(
-                                    controller: textFieldController,
-                                    decoration: const InputDecoration(hintText: '목록 이름'),
-                                    autofocus: true,
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      child: const Text('취소'),
-                                      onPressed: () => Navigator.pop(context),
-                                    ),
-                                    TextButton(
-                                      child: const Text('확인'),
-                                      onPressed: () async {
-                                        var newListName = textFieldController.text;
-                                        if (newListName.isNotEmpty) {
-                                          _stockListsBox.putAt(index, _stockListsBox.getAt(index)!..name = newListName);
-                                          setStateInner(() {});
-                                        } else {
-                                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록 이름을 입력하세요.')));
-                                        }
-                                        // use_build_context_synchronously
-                                        if (context.mounted) {
-                                          Navigator.pop(context);
-                                        }
-                                      },
-                                    )
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                          IconButton(
-                            iconSize: 20,
-                            icon: const Icon(Icons.file_upload_outlined),
-                            onPressed: () {
-                              TextEditingController textFieldController = TextEditingController();
-                              textFieldController.text = jsonEncode(_stockListsBox.getAt(index)!);
-                              showDialog(
-                                context: context,
-                                builder: (BuildContext context) => AlertDialog(
-                                  title: const Text('목록 내보내기'),
-                                  content: TextField(
-                                    controller: textFieldController,
-                                    decoration: const InputDecoration(hintText: '주식 목록'),
-                                    keyboardType: TextInputType.multiline,
-                                    autofocus: true,
-                                    maxLines: 10,
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      child: const Text('확인'),
-                                      onPressed: () => Navigator.pop(context),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                          IconButton(
-                            iconSize: 20,
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              _stockListsBox.deleteAt(index);
-                              setState(() {});
-                              setStateInner(() {});
-                            },
-                          ),
-                        ],
+      builder: (BuildContext context) => StatefulBuilder(
+        builder: (_, StateSetter setStateInner) => AlertDialog(
+          title: Row(children: [
+            const Text('목록 수정'),
+            IconButton(
+              iconSize: 20,
+              icon: const Icon(Icons.file_download_outlined),
+              onPressed: () {
+                TextEditingController textFieldController = TextEditingController();
+                showDialog(
+                  context: context,
+                  builder: (BuildContext context) => AlertDialog(
+                    title: const Text('목록 가져오기'),
+                    content: TextField(
+                      controller: textFieldController,
+                      decoration: const InputDecoration(hintText: '주식 목록'),
+                      keyboardType: TextInputType.multiline,
+                      autofocus: true,
+                      maxLines: 10,
+                    ),
+                    actions: [
+                      TextButton(
+                        child: const Text('취소'),
+                        onPressed: () => Navigator.pop(context),
                       ),
-                      dense: true,
-                    )
-                ],
-                onReorder: (int oldIndex, int newIndex) {
-                  if (oldIndex < newIndex) {
-                    newIndex -= 1;
-                  }
-                  final tempList = _stockListsBox.getAt(oldIndex)!;
-                  _stockListsBox.putAt(oldIndex, _stockListsBox.getAt(newIndex)!);
-                  _stockListsBox.putAt(newIndex, tempList);
-                  setState(() {});
-                  setStateInner(() {});
-                },
-              ),
-            );
-          },
-        ),
-        actions: [
-          TextButton(
-            child: const Text('확인'),
-            onPressed: () => Navigator.pop(context),
+                      TextButton(
+                        child: const Text('추가'),
+                        onPressed: () async {
+                          final stockListsJson = textFieldController.text;
+                          if (stockListsJson.isNotEmpty) {
+                            final stockLists = List.from(jsonDecode(stockListsJson).map((e) => StockList.fromJson(e)));
+                            for (StockList stockList in stockLists) {
+                              _stockListsBox.add(stockList);
+                              for (String ticker in stockList.tickers) {
+                                final stock = (await YahooFinance.searchStock(ticker))[0];
+                                _stocksBox.put(ticker, stock);
+                              }
+                            }
+                            setStateInner(() {});
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('JSON 텍스트를 입력해주세요.')));
+                          }
+                          // use_build_context_synchronously
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ]),
+          content: SizedBox(
+            width: 560, // default max size
+            child: ReorderableListView(
+              buildDefaultDragHandles: false,
+              children: [
+                for (int index = 0; index < _stockListsBox.values.length; index += 1)
+                  ListTile(
+                    key: Key(index.toString()),
+                    title: Text(_stockListsBox.getAt(index)!.name),
+                    tileColor: const Color(0xFFF6E2EA),
+                    leading: ReorderableDragStartListener(index: index, child: const Icon(Icons.drag_handle)),
+                    trailing: Wrap(
+                      children: [
+                        IconButton(
+                          iconSize: 20,
+                          icon: const Icon(Icons.edit),
+                          onPressed: () {
+                            TextEditingController textFieldController = TextEditingController();
+                            showDialog(
+                              context: context,
+                              builder: (BuildContext context) => AlertDialog(
+                                title: const Text('목록 이름 변경'),
+                                content: TextField(
+                                  controller: textFieldController,
+                                  decoration: const InputDecoration(hintText: '목록 이름'),
+                                  autofocus: true,
+                                ),
+                                actions: [
+                                  TextButton(
+                                    child: const Text('취소'),
+                                    onPressed: () => Navigator.pop(context),
+                                  ),
+                                  TextButton(
+                                    child: const Text('확인'),
+                                    onPressed: () {
+                                      var newListName = textFieldController.text;
+                                      if (newListName.isNotEmpty) {
+                                        _stockListsBox.putAt(index, _stockListsBox.getAt(index)!..name = newListName);
+                                        setStateInner(() {});
+                                      } else {
+                                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록 이름을 입력하세요.')));
+                                      }
+                                      Navigator.pop(context);
+                                    },
+                                  )
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                        IconButton(
+                          iconSize: 20,
+                          icon: const Icon(Icons.file_upload_outlined),
+                          onPressed: () {
+                            TextEditingController textFieldController = TextEditingController();
+                            textFieldController.text = jsonEncode([_stockListsBox.getAt(index)!]);
+                            showDialog(
+                              context: context,
+                              builder: (BuildContext context) => AlertDialog(
+                                title: const Text('목록 내보내기'),
+                                content: TextField(
+                                  controller: textFieldController,
+                                  decoration: const InputDecoration(hintText: '주식 목록'),
+                                  keyboardType: TextInputType.multiline,
+                                  autofocus: true,
+                                  maxLines: 10,
+                                ),
+                                actions: [
+                                  TextButton(
+                                    child: const Text('확인'),
+                                    onPressed: () => Navigator.pop(context),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                        IconButton(
+                          iconSize: 20,
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _stockListsBox.deleteAt(index);
+                            setState(() {});
+                            setStateInner(() {});
+                          },
+                        ),
+                      ],
+                    ),
+                    dense: true,
+                  )
+              ],
+              onReorder: (int oldIndex, int newIndex) {
+                if (oldIndex < newIndex) {
+                  newIndex -= 1;
+                }
+                final tempList = _stockListsBox.getAt(oldIndex)!;
+                _stockListsBox.putAt(oldIndex, _stockListsBox.getAt(newIndex)!);
+                _stockListsBox.putAt(newIndex, tempList);
+                setState(() {});
+                setStateInner(() {});
+              },
+            ),
           ),
-        ],
+          actions: [
+            TextButton(
+              child: const Text('확인'),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -120,7 +120,7 @@ class StockList {
 
   StockList.fromJson(Map<String, dynamic> json)
       : name = json['name'] as String,
-        tickers = json['tickers'] as List<String>;
+        tickers = json['tickers'].cast<String>();
 
   Map<String, dynamic> toJson() => {
         'name': name,

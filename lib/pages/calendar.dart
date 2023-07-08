@@ -25,7 +25,11 @@ class _MyEarningsCalendarPageState extends State<MyEarningsCalendarPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('실적 발표 예정일'), centerTitle: true),
+      appBar: AppBar(
+        title: const Text('실적 발표 예정일'),
+        scrolledUnderElevation: 0,
+        centerTitle: true,
+      ),
       body: FutureBuilder(
         future: Future(() async {
           var stocks =
@@ -73,7 +77,7 @@ class _MyEarningsCalendarPageState extends State<MyEarningsCalendarPage> {
                   },
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
                   child: Text(
                     _selectedDay.year > 1970 ? '${DateFormat.yMMMd('ko_KR').format(_selectedDay)} 발표' : '',
                     style: Theme.of(context).textTheme.titleSmall,
