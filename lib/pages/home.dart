@@ -213,7 +213,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                             if (!stockList.tickers.contains(selectedStock.ticker)) {
                               stockList.tickers.add(selectedStock.ticker);
                               sortTickers(stockList.tickers);
-                              _stockListsBox.put(_focusedTabIndex, stockList);
+                              _stockListsBox.putAt(_focusedTabIndex, stockList);
                               if (!_stocksBox.containsKey(selectedStock.ticker)) {
                                 _stocksBox.put(selectedStock.ticker, selectedStock);
                               }
