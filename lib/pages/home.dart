@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:intl/intl.dart';
@@ -192,61 +194,59 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       builder: (BuildContext context) => AlertDialog(
         title: const Text('종목 추가'),
         content: FutureBuilder(
-            future: YahooFinance.searchStock(searchText),
-            builder: (BuildContext context, AsyncSnapshot<List<Stock>> snapshot) {
-              if (snapshot.hasData) {
-                List<Stock> result = snapshot.requireData;
-                if (result.isNotEmpty) {
-                  return SizedBox(
-                    width: 560, // default max width
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: result.length,
-                      itemBuilder: (BuildContext context, int index) {
-                        final selectedStock = result[index];
-                        return ListTile(
-                          title: Text(selectedStock.ticker),
-                          subtitle: Text(selectedStock.name),
-                          trailing: Text(selectedStock.exchange),
-                          onTap: () async {
-                            final stockList = _stockListsBox.getAt(_focusedTabIndex)!;
-                            if (!stockList.tickers.contains(selectedStock.ticker)) {
-                              stockList.tickers.add(selectedStock.ticker);
-                              sortTickers(stockList.tickers);
-                              _stockListsBox.putAt(_focusedTabIndex, stockList);
-                              if (!_stocksBox.containsKey(selectedStock.ticker)) {
-                                _stocksBox.put(selectedStock.ticker, selectedStock);
-                              }
-                              setState(() {
-                                _searchController.clear();
-                              });
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록에 이미 추가된 종목이에요.')));
+          future: YahooFinance.searchStock(searchText),
+          builder: (BuildContext context, AsyncSnapshot<List<Stock>> snapshot) {
+            if (snapshot.hasData) {
+              List<Stock> result = snapshot.requireData;
+              if (result.isNotEmpty) {
+                return SizedBox(
+                  width: 560, // default max width
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: result.length,
+                    itemBuilder: (BuildContext context, int index) {
+                      final selectedStock = result[index];
+                      return ListTile(
+                        title: Text(selectedStock.ticker),
+                        subtitle: Text(selectedStock.name),
+                        trailing: Text(selectedStock.exchange),
+                        onTap: () {
+                          final stockList = _stockListsBox.getAt(_focusedTabIndex)!;
+                          if (!stockList.tickers.contains(selectedStock.ticker)) {
+                            stockList.tickers.add(selectedStock.ticker);
+                            sortTickers(stockList.tickers);
+                            _stockListsBox.putAt(_focusedTabIndex, stockList);
+                            if (!_stocksBox.containsKey(selectedStock.ticker)) {
+                              _stocksBox.put(selectedStock.ticker, selectedStock);
                             }
-                            // use_build_context_synchronously
-                            if (context.mounted) {
-                              Navigator.pop(context);
-                            }
-                          },
-                        );
-                      },
-                    ),
-                  );
-                }
-                return const ListTile(
-                  leading: Icon(Icons.info_outline),
-                  title: Text('종목을 찾을 수 없어요.'),
-                  subtitle: Text('종목 코드가 올바른지 확인해 주세요.'),
-                );
-              } else if (snapshot.hasError) {
-                return const ListTile(
-                  leading: Icon(Icons.error_outline),
-                  title: Text('종목을 찾을 수 없어요.'),
-                  subtitle: Text('종목 코드나 영어 이름으로 검색해 주세요.'),
+                            setState(() {
+                              _searchController.clear();
+                            });
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('목록에 이미 추가된 종목이에요.')));
+                          }
+                          Navigator.pop(context);
+                        },
+                      );
+                    },
+                  ),
                 );
               }
-              return const Center(child: CircularProgressIndicator());
-            }),
+              return const ListTile(
+                leading: Icon(Icons.info_outline),
+                title: Text('종목을 찾을 수 없어요.'),
+                subtitle: Text('종목 코드가 올바른지 확인해 주세요.'),
+              );
+            } else if (snapshot.hasError) {
+              return const ListTile(
+                leading: Icon(Icons.error_outline),
+                title: Text('종목을 찾을 수 없어요.'),
+                subtitle: Text('종목 코드나 영어 이름으로 검색해 주세요.'),
+              );
+            }
+            return const Center(child: CircularProgressIndicator());
+          },
+        ),
         actions: [
           TextButton(
             child: const Text('취소'),
@@ -309,9 +309,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       tileColor: const Color(0xFFF6E2EA),
                       leading: ReorderableDragStartListener(index: index, child: const Icon(Icons.drag_handle)),
                       trailing: Wrap(
-                        spacing: 8,
                         children: [
                           IconButton(
+                            iconSize: 20,
                             icon: const Icon(Icons.edit),
                             onPressed: () {
                               TextEditingController textFieldController = TextEditingController();
@@ -351,6 +351,34 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                             },
                           ),
                           IconButton(
+                            iconSize: 20,
+                            icon: const Icon(Icons.file_upload_outlined),
+                            onPressed: () {
+                              TextEditingController textFieldController = TextEditingController();
+                              textFieldController.text = jsonEncode(_stockListsBox.getAt(index)!);
+                              showDialog(
+                                context: context,
+                                builder: (BuildContext context) => AlertDialog(
+                                  title: const Text('목록 내보내기'),
+                                  content: TextField(
+                                    controller: textFieldController,
+                                    decoration: const InputDecoration(hintText: '주식 목록'),
+                                    keyboardType: TextInputType.multiline,
+                                    autofocus: true,
+                                    maxLines: 10,
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      child: const Text('확인'),
+                                      onPressed: () => Navigator.pop(context),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                          IconButton(
+                            iconSize: 20,
                             icon: const Icon(Icons.clear),
                             onPressed: () {
                               _stockListsBox.deleteAt(index);
@@ -360,6 +388,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           ),
                         ],
                       ),
+                      dense: true,
                     )
                 ],
                 onReorder: (int oldIndex, int newIndex) {
